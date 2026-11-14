@@ -1,14 +1,28 @@
 #!/bin/bash
-# Speak to Sister from the LAPTOP microphone. Sister runs on the board; the only link is the
-# serial console, held open by a `screen` session on this laptop.
-# Usage: tools/talk.sh [seconds]     (default 4). Uses the laptop's default microphone.
+# Speak to Sister from the LAPTOP microphone for a fixed number of seconds.
+# Sister runs on the board; the only link is the serial console.
+# Usage: tools/talk.sh [seconds]     (default 4)
+#
+# If the push-to-talk console (tools/sister_console.py) is running, this asks it to record;
+# holding SPACE in that console does the same thing without this script.
+# Otherwise it records with the small recorder here and sends through a `screen` session.
 set -euo pipefail
 SECS="${1:-4}"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+FIFO="$HERE/../.sister_console/inject"
+
+if pgrep -f sister_console.py >/dev/null && [ -p "$FIFO" ]; then
+  echo "Speak now ($SECS seconds)..."
+  printf 'PTT %s' "$SECS" > "$FIFO"
+  sleep "$SECS"
+  echo "Sent through the push-to-talk console. Sister is transcribing on the board."
+  exit 0
+fi
+
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 S="$( (screen -ls 2>/dev/null || true) | awk '/Attached|Detached/{print $1; exit}')"   # screen -ls exits 1 even when it lists sessions
-[ -n "$S" ] || { echo "no screen session holding the board console"; exit 1; }
-HERE="$(cd "$(dirname "$0")" && pwd)"
+[ -n "$S" ] || { echo "nothing is holding the board console; start tools/sister_console.py --start"; exit 1; }
 REC="$HERE/.rec"
 [ -x "$REC" ] || swiftc -O "$HERE/rec.swift" -o "$REC"   # first run only
 echo "Speak now ($SECS seconds)..."
