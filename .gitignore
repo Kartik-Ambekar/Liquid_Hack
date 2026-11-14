@@ -38,3 +38,6 @@ tools/.rec
 tts_cache/
 handover-SIST-*.txt
 .sister_console/
+
+sample_audit.jsonl
+.pytest_cache/

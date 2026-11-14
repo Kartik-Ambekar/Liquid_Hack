@@ -14,11 +14,11 @@ if __name__ == "__main__":
     port = int(os.environ.get("SISTER_PORT", "8080"))
 
     print("=" * 70)
-    print("  SISTER: Offline Health Triage & Medical Imaging Assistant")
+    print("  SISTER: SAMPLE history — synthetic demonstration only")
     print("  Host Target: Dragonwing IQ-9075 (Edge Native / Wi-Fi Cut Resilient)")
-    print("  Audio Model: LiquidAI/LFM3-Audio-2B (ASR Speech Engine)")
+    print("  Audio: configured on-board Liquid package; confirm transcripts")
     print("  Vision Model: LiquidAI/LFM3-Omni-2B (512x512 Multimodal Vision)")
-    print("  Triage Core: Code-Driven Deterministic Red-Flag Engine (Rule 4)")
+    print("  Interview: versioned SAMPLE questionnaire; no self-care clearance")
     print(f"  Access UI:   http://{host}:{port}")
     print("=" * 70)
 

@@ -1,20 +1,6 @@
-"""
-main.py - FastAPI Application Server for Sister Offline Health Triage Assistant
-Runs edge-native on Dragonwing IQ-9075 or local offline workstation.
-Fulfills all functional requirements:
-  - F1: Guided triage interview flow
-  - F2: Ingest path for X-Ray / MRI / notes
-  - F3: Triage result with urgency level, plain language reason, next steps
-  - F4: Deterministic red flags in code
-  - F5: Deep multimodal analysis of MRI and X-Ray
-  - F6: Flushed JSONL audit log
-  - F7: 100% offline self-contained (no external internet/CDN required)
-  - F8: One-page structured handover summary for receiving clinician
-  - F9: Camera capture & file upload for scans
-  - F10: Edge-hosted web UI
-  - F12: Voice first: audio recording and transcription via LiquidAI/LFM3-Audio-2B
-  - F15: Typed fallback
-  - F16: Speech synthesis (Sister speaks questions)
+"""Sister HTTP app: SAMPLE history with real Liquid extraction and fixed routing.
+Synthetic demonstrations only; no validated clinical decisions or self-care clearance.
+Legacy imaging endpoints remain available as unconfirmed attachments outside routing.
 """
 
 import os
@@ -25,9 +11,9 @@ from typing import Optional
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from backend.session_manager import SessionManager, AUDIT_LOG_FILE
+from backend.sample_interview import SampleSessionManager as SessionManager, AUDIT_LOG_FILE, InterviewError, controller
 from backend.imaging_analyzer import MedicalImageAnalyzer
 from backend.liquid_engine import LiquidAIEngine
 
@@ -44,13 +30,35 @@ if os.path.exists(SAMPLES_DIR):
 
 class TurnRequest(BaseModel):
     session_id: str
-    user_input: str
+    user_input: str = Field(min_length=1, max_length=8000)
     input_type: str = "text" # "text", "voice", "choice"
     voice_meta: Optional[dict] = None
+    question_id: str
+    revision: int
+    turn_id: str = Field(min_length=1, max_length=100)
+    choice_value: Optional[str] = None
+
+class ActionRequest(BaseModel):
+    session_id: str
+    action: str
+    field_id: Optional[str] = None
+
+@app.exception_handler(InterviewError)
+async def interview_error(request, exc):
+    return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
+
+@app.post("/api/session/action")
+def session_action(req: ActionRequest):
+    return SessionManager.action(req.session_id, req.action, req.field_id)
+
+@app.get("/api/session/{session_id}")
+def session_state(session_id: str):
+    return SessionManager.get_initial_prompt(session_id)
+
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_index():
-    index_file = os.path.join(STATIC_DIR, "index.html")
+    index_file = os.path.join(STATIC_DIR, "sample.html")
     if os.path.exists(index_file):
         with open(index_file, "r", encoding="utf-8") as f:
             return HTMLResponse(content=f.read())
@@ -62,14 +70,14 @@ async def start_session():
     Initializes a new patient triage session (F1, F2).
     """
     session = SessionManager.create_session()
-    prompt = SessionManager.get_initial_prompt()
+    prompt = SessionManager.get_initial_prompt(session["session_id"])
     return JSONResponse({
         "session_id": session["session_id"],
         "prompt": prompt
     })
 
 @app.post("/api/session/turn")
-async def handle_turn(req: TurnRequest):
+def handle_turn(req: TurnRequest):
     """
     Handles a single conversational turn in the interview (F1, F3, F4, F6).
     """
@@ -77,16 +85,19 @@ async def handle_turn(req: TurnRequest):
         session_id=req.session_id,
         user_input=req.user_input,
         input_type=req.input_type,
-        voice_meta=req.voice_meta
+        voice_meta=req.voice_meta, question_id=req.question_id, revision=req.revision,
+        turn_id=req.turn_id, choice_value=req.choice_value
     )
     return JSONResponse(resp)
 
 @app.post("/api/transcribe")
-async def transcribe_audio(audio: UploadFile = File(...)):
+def transcribe_audio(audio: UploadFile = File(...)):
     """
     Transcribes spoken answer from patient via LiquidAI/LFM3-Audio-2B (F12).
     """
-    contents = await audio.read()
+    contents = audio.file.read(2_000_001)
+    if len(contents) > 2_000_000:
+        raise HTTPException(status_code=413, detail="Audio file too large")
     if not contents:
         raise HTTPException(status_code=400, detail="Empty audio file")
     
@@ -117,6 +128,10 @@ async def analyze_imaging(
     else:
         raise HTTPException(status_code=400, detail="No image provided")
 
+    session = SessionManager._require(session_id)
+    if controller.value(session, "consent") != "yes":
+        raise HTTPException(status_code=422, detail="Consent is required before image processing")
+    # Legacy image analysis is stored separately and never changes SAMPLE routing.
     # Run deep radiological analysis
     analysis = MedicalImageAnalyzer.analyze(raw_bytes, filename)
     
@@ -207,16 +222,6 @@ async def get_hardware_status():
     """
     Telemetry and hardware status for offline judging demonstration (F7).
     """
-    has_geniex = LiquidAIEngine.check_geniex_available()
-    return JSONResponse({
-        "platform": "Dragonwing IQ-9075",
-        "edge_mode": "100% Offline (Wi-Fi Cut Resilient)",
-        "models": {
-            "audio": "LiquidAI/LFM3-Audio-2B (ASR Speech Engine)",
-            "vision": "LiquidAI/LFM3-Omni-2B (512x512 Multimodal Vision)",
-            "dialogue": "LiquidAI/LFM3-1.7B (Clinical Triage Reasoning)"
-        },
-        "geniex_daemon": "Connected" if has_geniex else "Embedded Edge Fallback Active",
-        "deterministic_rules": "Active (Code Decides, Model Explains)",
-        "flushed_audit_log": os.path.exists(AUDIT_LOG_FILE)
-    })
+    return JSONResponse({"runtime": LiquidAIEngine.runtime_status(),
+                         "interview": "SAMPLE v0.1 — synthetic demo only",
+                         "clinical_validation": False})

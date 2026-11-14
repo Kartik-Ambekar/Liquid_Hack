@@ -44,7 +44,9 @@ RELEASE_GAP = 0.30            # auto-repeat stopped for this long: the key was r
 PREROLL = int(RATE * 0.35)    # speech just before the key registered is kept
 MIN_SPEECH = int(RATE * 0.5)
 MAX_SPEECH = RATE * 28        # the board accepts up to 30 seconds
-START_CMD = b"cd ~/sister && python3 -W ignore sister_cli.py --speak\n"
+# The four-step voice demo that was verified on the board. Older board copies name it sister_cli.py.
+START_CMD = (b"cd ~/sister && python3 -W ignore "
+             b"$([ -f sister_voice_demo.py ] && echo sister_voice_demo.py || echo sister_cli.py) --speak\n")
 STATE_DIR = Path(__file__).resolve().parent.parent / ".sister_console"
 ANSI = re.compile(rb"\x1b\[[0-9;?]*[A-Za-z]")
 

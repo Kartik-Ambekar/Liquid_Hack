@@ -2,8 +2,9 @@
 """
 sister_cli.py - Sister in a terminal, for the Wi-Fi-off demo over the board's serial console.
 
-Same interview and the same deterministic triage rules as the web app
-(backend/session_manager.py, backend/triage_rules.py). Standard library only.
+Same SAMPLE questionnaire as the web app (backend/sample_interview.py).
+Synthetic demonstration only. Type help or stop at any question; use
+correct <field_id> to revise a recorded answer. Standard library only.
 
 At any question you can:
   type an answer            free text
@@ -35,7 +36,7 @@ warnings.simplefilter("ignore", DeprecationWarning)  # audioop, still present in
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from backend.liquid_engine import LiquidAIEngine, WORK_DIR  # noqa: E402
-from backend.session_manager import SessionManager, AUDIT_LOG_FILE  # noqa: E402
+from backend.sample_interview import SampleSessionManager as SessionManager, AUDIT_LOG_FILE, InterviewError  # noqa: E402
 from backend.triage_rules import RULESET_STATUS  # noqa: E402
 
 SAMPLES = sorted(p for p in (HERE / "samples").iterdir() if p.suffix.lower() in (".png", ".jpg"))
@@ -92,13 +93,10 @@ def receive_upload():
     except Exception:
         pass
     print("  receiving audio from the laptop microphone...", flush=True)
-    chunks, expected, fmt, rate = [], "", "pcm16", 12000
+    chunks, expected = [], ""
     try:
         for line in sys.stdin:
             line = line.strip()
-            if line.startswith("FMT "):          # e.g. "FMT ulaw 12000" from tools/sister_console.py
-                fmt, rate = line.split()[1], int(line.split()[2])
-                continue
             if line.startswith("END"):
                 expected = line[3:].strip()
                 break
@@ -113,9 +111,7 @@ def receive_upload():
     if not pcm or hashlib.sha256(pcm).hexdigest() != expected:
         print("  the recording was damaged on the way here. Please say it again, or type your answer.")
         return None
-    if fmt == "ulaw":
-        pcm = audioop.ulaw2lin(pcm, 2)
-    pcm, _ = audioop.ratecv(pcm, 2, 1, rate, 16000, None)
+    pcm, _ = audioop.ratecv(pcm, 2, 1, 12000, 16000, None)
     WORK_DIR.mkdir(parents=True, exist_ok=True)
     path = WORK_DIR / "from_laptop.wav"
     with wave.open(str(path), "wb") as out:
@@ -135,9 +131,6 @@ def metrics(result):
 
 def transcribe(path):
     result = LiquidAIEngine.transcribe_audio_wav(Path(path).expanduser().read_bytes())
-    SessionManager._flush_log({"event": "TRANSCRIPTION", "file": str(path), "ok": result["ok"],
-                               "transcript": result["transcript"], "errors": result["errors"],
-                               "latency_ms": result.get("latency_ms"), "model": result.get("model")})
     if not result["ok"]:
         print(f"  could not transcribe ({'; '.join(result['errors'])}). Please type your answer.")
         return None
@@ -183,43 +176,43 @@ def main():
     print(" SISTER  offline health triage  |  runs on this board, no network needed")
     print(" models staged: " + ", ".join(f"{role}={p['package']}{'' if p['staged'] else ' (MISSING)'}"
                                          for role, p in status["packages"].items()))
-    print(" triage is decided by rules in code; the models listen, look and explain")
-    print(f" rules: {RULESET_STATUS}")
+    print(" SAMPLE history prototype: synthetic cases only. Type help or stop at any question.")
+    print(" No diagnosis or safe waiting period is established.")
     print("=" * 72)
     session = SessionManager.create_session()
     sid = session["session_id"]
-    response = SessionManager.get_initial_prompt()
-    repeat_prompt_only = False
+    response = SessionManager.get_initial_prompt(sid)
     while True:
-        if repeat_prompt_only:          # an empty line: show the prompt again without re-asking aloud
-            repeat_prompt_only = False
-            try:
-                raw = input("YOU> ").strip()
-            except EOFError:
-                return 1
-            if not raw:
-                repeat_prompt_only = True
-                continue
-            choices = response.get("choices", [])
-        else:
-            raw = None
-            say(response.get("sister_message", ""), response.get("spoken_text"))
+        say(response.get("sister_message", ""), response.get("spoken_text"))
+        if response.get("question_id") == "review_confirmed" or response.get("step") == "REVIEW_CORRECTIONS":
+            print(response["handover_note"]["raw_text"])
+            print("Type correct <field_id> to edit, or confirm if awaiting review.")
         if response.get("status") in ("completed", "error"):
             break
         choices = response.get("choices", [])
-        for index, choice in enumerate(choices if raw is None else [], 1):
+        for index, choice in enumerate(choices, 1):
             print(f"   {index}. " + re.sub(r"[^\x20-\x7e]+", "", choice["label"]).strip())  # serial console is ASCII
-        if raw is None:
-            if response.get("step") in ("GREETING_INGEST", "AWAITING_INGEST"):
-                print("   scans: " + "  ".join(f"s {i}={p.stem}" for i, p in enumerate(SAMPLES, 1)))
-            try:
-                raw = input("YOU> ").strip()
-            except EOFError:
-                return 1
-            if not raw:
-                repeat_prompt_only = True
-                continue
-        kind, answer = "text", raw
+        if response.get("step") in ("GREETING_INGEST", "AWAITING_INGEST"):
+            print("   scans: " + "  ".join(f"s {i}={p.stem}" for i, p in enumerate(SAMPLES, 1)))
+        try:
+            raw = input("YOU> ").strip()
+        except EOFError:
+            return 1
+        if not raw:
+            continue
+        if raw.lower() in ("help", "stop"):
+            response = SessionManager.action(sid, "get_help_now" if raw.lower() == "help" else "stop")
+            continue
+        if raw.lower().startswith("correct "):
+            try: response = SessionManager.action(sid,"correct",raw[8:].strip())
+            except InterviewError as exc: print(str(exc))
+            continue
+        if raw.lower() == "confirm" and response.get("step") == "REVIEW_CORRECTIONS":
+            response = SessionManager.action(sid,"confirm_summary")
+            continue
+        if response.get("question_id") == "review_confirmed" or response.get("step") == "REVIEW_CORRECTIONS":
+            print(response["handover_note"]["raw_text"])
+        kind, answer, choice_value = "text", raw, None
         if raw.lower().startswith("s ") and response.get("step") in ("GREETING_INGEST", "AWAITING_INGEST"):
             response = ingest_scan(sid, raw[2:].strip())
             continue
@@ -230,14 +223,25 @@ def main():
         elif raw.lower() == "u":
             kind, answer = "voice", receive_upload()
         elif raw.isdigit() and 0 < int(raw) <= len(choices):
-            kind, answer = "choice", re.sub(r"^[^\w]+", "", choices[int(raw) - 1]["label"]).strip()
+            choice = choices[int(raw) - 1]
+            kind, answer, choice_value = "choice", choice["label"], choice["value"]
         if not answer:
             continue
-        response = SessionManager.process_turn(sid, answer, kind)
+        if kind == "voice":
+            confirmed = input("Is the transcript correct? [y/N] ").strip().lower()
+            if confirmed != "y": continue
+        try:
+            import uuid
+            response = SessionManager.process_turn(sid, answer, kind,
+                voice_meta={"confirmed":True} if kind=="voice" else None,
+                question_id=response.get("question_id"), revision=response["revision"],
+                turn_id=uuid.uuid4().hex, choice_value=choice_value)
+        except InterviewError as exc:
+            print(str(exc))
 
     decision = SessionManager.get_session(sid).get("triage_decision") or {}
     print("\n" + "-" * 72)
-    print(f" DECISION (by rule {decision.get('rule_fired')}): {decision.get('urgency_label')}")
+    print(f" Interview outcome: {response.get('step')}")
     print("-" * 72)
     if explain and decision:
         print("  asking the text model to explain it in plain words...", flush=True)

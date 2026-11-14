@@ -1,3 +1,53 @@
+# Sister: SAMPLE interview prototype
+
+The default web and terminal apps now use the [SAMPLE questionnaire](docs/sister-questionnaire-v1/QUESTIONNAIRE.md). This is an **unvalidated synthetic demonstration**, not a patient-ready triage service.
+
+## Current interview
+
+- 41 possible questions, with conditional pain/temperature/history branches and explicit unknown/declined answers.
+- Real Liquid text extraction through the existing ZETIC wrapper, using the packaged system prompt, schema, and examples. Maximum two total attempts; missing or malformed model output produces a visible error, never invented patient facts.
+- Fixed questions and safety messages. Reported safety concerns interrupt the interview; no branch recommends self-care or a safe waiting interval.
+- Editable, revision-confirmed summary and text download. Unanswered and inactive fields remain visible. Image observations never control questionnaire routing.
+- Browser microphone/WAV input with transcript editing and explicit confirmation, plus typed and choice input. Terminal retains the team's board ASR/TTS integrations.
+- Persistent help/stop controls, stale-response rejection, retry deduplication, and session deletion. Help can interrupt an outstanding model call.
+- Dedicated `sample_audit.jsonl` after consent; old tracked logs are untouched. Sessions themselves are in memory. A browser on another device receives data over the local connection.
+
+## Run
+
+```sh
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python start.py
+```
+
+Open `http://127.0.0.1:8080`. On a separate laptop, use your existing local SSH port-forwarding setup. Model location and package overrides remain `SISTER_ZETIC_DIR`, `SISTER_TEXT_PKG`, `SISTER_AUDIO_PKG`, and `SISTER_SPEECH_PKG`. No cloud model fallback is configured. Choices work without a model; free-text extraction and transcription require the actual staged runtime.
+
+Terminal: `python3 sister_cli.py` (optionally `--speak`). Use numbered choices, `help`, `stop`, and `correct <field_id>`. Confirm each voice transcript before it is accepted. Summary correction is available before finishing. Web users may also edit completed summaries.
+
+## Verify
+
+```sh
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m pytest tests/test_sample_app.py -q
+.venv/bin/python -m unittest discover -s docs/sister-questionnaire-v1 -p test_controller.py -q
+# Optional real-browser integration check:
+.venv/bin/pip install playwright
+.venv/bin/python -m playwright install chromium
+.venv/bin/python -m pytest tests/test_sample_browser.py -q
+```
+
+HTTP, terminal, and browser tests use **explicit model test doubles**. They verify integration and routing; they do not measure Liquid extraction accuracy or validate clinical content. The existing `test_direct_units.py`, `test_in_process.py`, and `test_end_to_end.py` are historical tests of the previous short interview/heuristic imaging paths and are not the test contract for the new default UI.
+
+Tested locally: complete default and branched interviews, unknown safety responses, corrections, consent, malformed output and repair limits, unconfirmed voice rejection, help interruption during inference, image isolation, deleted sessions/logs, real browser summary editing/download and mobile-width layout. Actual extraction quality, microphone acoustics, model latency and disconnected Dragonwing operation require a separate board rehearsal; the older board benchmarks below do not measure this new extraction prompt.
+
+Implementation: [backend/sample_interview.py](backend/sample_interview.py), [HTTP app](backend/main.py), [web UI](static/sample.html), and [SAMPLE pack](docs/sister-questionnaire-v1/IMPLEMENTATION.md). The runtime loads the questionnaire, controller, schema and prompts from that versioned pack; include `docs/sister-questionnaire-v1/` when deploying.
+
+---
+
+# Historical implementation and board notes
+
+The material below describes the earlier three-step interview and imaging demo. It is retained for provenance, including the team's board measurements. Its triage outcomes, imaging claims, and example flows do not describe the new default SAMPLE interview and do not constitute clinical validation.
+
 # Sister: Offline Health Triage & Medical Imaging Assistant
 
 > **"Sister"** is what a nurse is called in South Africa. Stationed in remote rural communities where there is no internet and reaching a district hospital costs real time and money, Sister is an offline health triage assistant that runs edge-native on the **Dragonwing IQ-9075**.
@@ -120,11 +170,20 @@ endurance, time with the model kept loaded, and accuracy of any kind.
 
 ### 1a. Terminal demo on the board (works with Wi-Fi off)
 
+There are two terminal entry points:
+
+- `sister_voice_demo.py` is the four-step interview that was run end to end on the board with real models,
+  voice in and out, and the dashboard. It is what `tools/sister_console.py --start` launches.
+- `sister_cli.py` is the newer SAMPLE history interview (`backend/sample_interview.py`, see the section on it
+  in this README). It has its own tests; it has not been run on the board with the voice console yet.
+
+The commands below use the voice demo.
+
 Needs only Python 3.12 and the models staged in `~/zetic-demo` (SDK, `run.py`, `models/`). From the board's
 serial console or any shell on the board:
 
 ```bash
-python3 sister_cli.py
+python3 sister_voice_demo.py
 ```
 
 Add `--speak` to have Sister say each question aloud through the board speaker (speech generated on the board
