@@ -46,7 +46,9 @@ MIN_SPEECH = int(RATE * 0.5)
 MAX_SPEECH = RATE * 28        # the board accepts up to 30 seconds
 # Default: the SAMPLE history interview (sister_cli.py, backend/sample_interview.py).
 # SISTER_SHORT=1 asks only the first half of the questionnaire, which is what fits a demo.
-START_CMD = b"cd ~/sister && SISTER_SHORT=1 python3 -W ignore sister_cli.py --speak --no-explain\n"
+# SISTER_MAX_PROMPT_CHARS=0 turns the model-based extractor off: on the board (2026-11-13) its
+# output failed validation on both attempts and cost about 20 s per answer before the fallback.
+START_CMD = b"cd ~/sister && SISTER_SHORT=1 SISTER_MAX_PROMPT_CHARS=0 python3 -W ignore sister_cli.py --speak --no-explain\n"
 # --classic: the earlier four-step voice demo.
 CLASSIC_CMD = b"cd ~/sister && python3 -W ignore sister_voice_demo.py --speak\n"
 STATE_DIR = Path(__file__).resolve().parent.parent / ".sister_console"
