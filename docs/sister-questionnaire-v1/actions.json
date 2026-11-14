@@ -1,0 +1,12 @@
+{
+  "review_status": "proposed_unreviewed",
+  "localization_required": true,
+  "demo_banner": "SIMULATION — unvalidated questionnaire; use synthetic cases only.",
+  "HELP_NOW": "Stop this interview and seek urgent medical help now. Contact your local emergency service or ask someone nearby to help you reach urgent care. Do not wait to finish these questions.",
+  "ASSESSMENT_INCOMPLETE": "Sister cannot complete this assessment. Please seek help from a healthcare professional. If you think this may be an emergency, contact your local emergency service now.",
+  "OUT_OF_SCOPE": "This version cannot assess your situation. Please contact a healthcare professional for help. If you need urgent help, contact your local emergency service now.",
+  "STOPPED": "The interview has stopped. This is not an assessment of how urgent your condition is.",
+  "HANDOFF_READY": "Your answers are ready to share with a healthcare professional. This record does not establish a diagnosis or whether it is safe to wait for care.",
+  "ERROR": "Sister could not reliably record that answer. Please choose an answer on screen or type it again.",
+  "CLARIFY": "I could not clearly record your answer. {question} You can also choose I don’t know or Prefer not to answer."
+}

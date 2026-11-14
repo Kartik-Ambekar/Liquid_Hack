@@ -1,0 +1,14 @@
+# Sources, provenance and review queue
+
+Accessed 2026-11-13 Pacific. This is a curated source map, not a systematic evidence review. Links identify source material; they do not certify this questionnaire or authorize production use.
+
+| ID | Source and locator | Use in this package | Limit |
+| --- | --- | --- | --- |
+| BEC_SAMPLE | [WHO–ICRC Basic Emergency Care, 2018; official page and linked training slides](https://www.who.int/publications/i/item/basic-emergency-care-approach-to-the-acutely-ill-and-injured); [participant workbook, “Approach to the emergency patient”, printed p. 5](https://hlh.who.int/docs/librariesprovider4/clinical-care/who-icrc-basic-emergency-care.pdf) | SAMPLE categories: symptoms/signs, allergies, medicines, past history, last oral intake and surrounding events. | Intended for frontline healthcare providers. Patient wording, extra questions and software flow here are adaptations; they are not quoted clinical algorithms. |
+| AHA2024 | [AHA/American Red Cross 2024 Guidelines for First Aid](https://cpr.heart.org/en/resuscitation-science/2024-first-aid-guidelines), “General Approach to First Aid” and topic sections on chest pain, stroke, bleeding and allergic reactions | Reference for recognizing potential emergencies and seeking professional help promptly. | The small proposed self-report screen selects only some concerns. It omits other emergencies and provider observations. Do not represent it as a complete or validated AHA screen. |
+| IITT_SCOPE | [WHO Interagency Integrated Triage Tool](https://www.who.int/tools/triage), Overview / Routine Triage | Clarifies why facility triage categories are not implemented here. | Facility emergency-unit triage; its age bands and color categories are not this app's adult-only product boundaries. |
+| DESIGN | This package, v0.1.0 | All exact wording, age/scope gates, branch order, symptom follow-ups, unknown handling, schemas and demo actions. | Proposed engineering choices, with no claimed clinical validation. |
+
+SAMPLE guides history collection; it is not a stand-alone triage scoring system. ABCDE includes observations, examination and actions that cannot be reproduced by a patient chatbot alone. No WHO clinical rule, treatment threshold or medication dose is encoded in this package.
+
+Clinical review queue: assess missing emergency presentations; approve intended operator/population; review whether proposed wording is understood; select local emergency/referral actions; review treatment-independent uncertainty policy; check pregnancy/pediatric/trauma exclusions and accessibility; evaluate downstream false reassurance and extraction failures. Select exact editions/sections for any later clinical rules and preserve reviewer, decision date, adaptation notes and tests. Review source reuse terms before redistributing original materials. No original manual is bundled here.

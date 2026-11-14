@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sister extraction v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "turn_id",
+    "facts"
+  ],
+  "properties": {
+    "turn_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "facts": {
+      "type": "array",
+      "maxItems": 41,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "field_id",
+          "status",
+          "value",
+          "evidence",
+          "corrects_previous"
+        ],
+        "properties": {
+          "field_id": {
+            "enum": [
+              "self",
+              "adult",
+              "consent",
+              "breathing_now",
+              "chest_now",
+              "bleeding_now",
+              "neurologic_now",
+              "faint_confused_now",
+              "swelling_now",
+              "pregnancy_context",
+              "complaint",
+              "onset",
+              "progression",
+              "impact",
+              "other_symptoms",
+              "pain_present",
+              "pain_location",
+              "pain_description",
+              "pain_change",
+              "feverish",
+              "temperature_measured",
+              "temperature_value",
+              "temperature_unit",
+              "temperature_time",
+              "allergies",
+              "allergy_details",
+              "allergy_reaction",
+              "medicines",
+              "medicine_list",
+              "medicine_last",
+              "medicine_changes",
+              "conditions",
+              "condition_details",
+              "similar_before",
+              "similar_details",
+              "last_intake",
+              "event",
+              "injury_exposure",
+              "event_details",
+              "additional",
+              "review_confirmed"
+            ]
+          },
+          "status": {
+            "enum": [
+              "answered",
+              "unknown",
+              "declined",
+              "ambiguous"
+            ]
+          },
+          "value": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "evidence": {
+            "type": "string",
+            "minLength": 1
+          },
+          "corrects_previous": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}

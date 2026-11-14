@@ -1,0 +1,849 @@
+{
+  "id": "sister-sample-adult-demo",
+  "version": "0.1.0",
+  "mode": "synthetic_demo_only",
+  "clinical_validation": false,
+  "population": "Self-report adults 18+; English; exclusions below are product boundaries, not WHO age or triage definitions.",
+  "intro": "Sister can help record information for a healthcare professional. This prototype cannot tell you that it is safe to stay home. If you need urgent help, use Get help now instead of completing these questions.",
+  "questions": [
+    {
+      "id": "self",
+      "section": "setup",
+      "text": "Are you answering about yourself?",
+      "value_type": "yes_no",
+      "definition": "Are you answering about yourself?",
+      "source_ids": [
+        "DESIGN"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [],
+      "choices": [
+        "yes",
+        "no",
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "adult",
+      "section": "setup",
+      "text": "Are you 18 years old or older?",
+      "value_type": "yes_no",
+      "definition": "Are you 18 years old or older?",
+      "source_ids": [
+        "DESIGN"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [],
+      "choices": [
+        "yes",
+        "no",
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "consent",
+      "section": "setup",
+      "text": "May I ask you some questions and save your answers on this device for a healthcare professional?",
+      "value_type": "yes_no",
+      "definition": "May I ask you some questions and save your answers on this device for a healthcare professional?",
+      "source_ids": [
+        "DESIGN"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [],
+      "choices": [
+        "yes",
+        "no",
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "breathing_now",
+      "section": "safety",
+      "text": "Are you having trouble breathing right now?",
+      "value_type": "yes_no",
+      "definition": "Current patient-reported difficulty breathing; exclude historical or other-person symptoms.",
+      "source_ids": [
+        "AHA2024"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": true,
+      "when": [],
+      "choices": [
+        "yes",
+        "no",
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "chest_now",
+      "section": "safety",
+      "text": "Do you have chest pain or pressure right now?",
+      "value_type": "yes_no",
+      "definition": "Current patient-reported chest pain or pressure.",
+      "source_ids": [
+        "AHA2024"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": true,
+      "when": [],
+      "choices": [
+        "yes",
+        "no",
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "bleeding_now",
+      "section": "safety",
+      "text": "Are you bleeding heavily right now?",
+      "value_type": "yes_no",
+      "definition": "Current patient report of heavy bleeding; do not infer blood loss from a picture.",
+      "source_ids": [
+        "AHA2024"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": true,
+      "when": [],
+      "choices": [
+        "yes",
+        "no",
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "neurologic_now",
+      "section": "safety",
+      "text": "Have you suddenly developed trouble speaking, a drooping face, or weakness on one side?",
+      "value_type": "yes_no",
+      "definition": "A report of any listed newly sudden symptom is yes; a bare yes to this screen refers to the combined any-of question.",
+      "source_ids": [
+        "AHA2024"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": true,
+      "when": [],
+      "choices": [
+        "yes",
+        "no",
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "faint_confused_now",
+      "section": "safety",
+      "text": "Are you newly confused or feeling as though you may pass out right now?",
+      "value_type": "yes_no",
+      "definition": "Current new confusion or feeling about to lose consciousness.",
+      "source_ids": [
+        "AHA2024"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": true,
+      "when": [],
+      "choices": [
+        "yes",
+        "no",
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "swelling_now",
+      "section": "safety",
+      "text": "Is your tongue or throat swelling right now?",
+      "value_type": "yes_no",
+      "definition": "Current patient-reported tongue or throat swelling.",
+      "source_ids": [
+        "AHA2024"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": true,
+      "when": [],
+      "choices": [
+        "yes",
+        "no",
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "pregnancy_context",
+      "section": "scope",
+      "text": "Are you pregnant, possibly pregnant, or have you given birth within the past year?",
+      "value_type": "yes_no",
+      "definition": "Any listed pregnancy/recent-birth context is yes. This is a deliberately broad product scope boundary, not a clinical threshold.",
+      "source_ids": [
+        "DESIGN"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [],
+      "choices": [
+        "yes",
+        "no",
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "complaint",
+      "section": "S",
+      "text": "What is the main problem bothering you today?",
+      "value_type": "text",
+      "definition": "What is the main problem bothering you today?",
+      "source_ids": [
+        "BEC_SAMPLE"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [],
+      "choices": [
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "onset",
+      "section": "S",
+      "text": "When did this problem start?",
+      "value_type": "text",
+      "definition": "When did this problem start?",
+      "source_ids": [
+        "BEC_SAMPLE"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [],
+      "choices": [
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "progression",
+      "section": "S",
+      "text": "How has it changed since it started?",
+      "value_type": "text",
+      "definition": "How has it changed since it started?",
+      "source_ids": [
+        "DESIGN"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [],
+      "choices": [
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "impact",
+      "section": "S",
+      "text": "What is this problem making it difficult for you to do?",
+      "value_type": "text",
+      "definition": "What is this problem making it difficult for you to do?",
+      "source_ids": [
+        "DESIGN"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [],
+      "choices": [
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "other_symptoms",
+      "section": "S",
+      "text": "What other symptoms have you noticed?",
+      "value_type": "text",
+      "definition": "What other symptoms have you noticed?",
+      "source_ids": [
+        "BEC_SAMPLE"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [],
+      "choices": [
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "pain_present",
+      "section": "S",
+      "text": "Are you having pain?",
+      "value_type": "yes_no",
+      "definition": "Are you having pain?",
+      "source_ids": [
+        "DESIGN"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [],
+      "choices": [
+        "yes",
+        "no",
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "pain_location",
+      "section": "S-pain",
+      "text": "Where do you feel the pain?",
+      "value_type": "text",
+      "definition": "Where do you feel the pain?",
+      "source_ids": [
+        "DESIGN"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [
+        {
+          "field": "pain_present",
+          "equals": "yes"
+        }
+      ],
+      "choices": [
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "pain_description",
+      "section": "S-pain",
+      "text": "How would you describe the pain?",
+      "value_type": "text",
+      "definition": "How would you describe the pain?",
+      "source_ids": [
+        "DESIGN"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [
+        {
+          "field": "pain_present",
+          "equals": "yes"
+        }
+      ],
+      "choices": [
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "pain_change",
+      "section": "S-pain",
+      "text": "What makes the pain better or worse?",
+      "value_type": "text",
+      "definition": "What makes the pain better or worse?",
+      "source_ids": [
+        "DESIGN"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [
+        {
+          "field": "pain_present",
+          "equals": "yes"
+        }
+      ],
+      "choices": [
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "feverish",
+      "section": "S",
+      "text": "Have you felt unusually hot or feverish?",
+      "value_type": "yes_no",
+      "definition": "Have you felt unusually hot or feverish?",
+      "source_ids": [
+        "DESIGN"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [],
+      "choices": [
+        "yes",
+        "no",
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "temperature_measured",
+      "section": "S-temperature",
+      "text": "Have you measured your temperature with a thermometer?",
+      "value_type": "yes_no",
+      "definition": "Have you measured your temperature with a thermometer?",
+      "source_ids": [
+        "DESIGN"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [
+        {
+          "field": "feverish",
+          "equals": "yes"
+        }
+      ],
+      "choices": [
+        "yes",
+        "no",
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "temperature_value",
+      "section": "S-temperature",
+      "text": "What number did the thermometer show?",
+      "value_type": "text",
+      "definition": "Exact reported thermometer number as text. Do not estimate, interpret or convert.",
+      "source_ids": [
+        "DESIGN"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [
+        {
+          "field": "feverish",
+          "equals": "yes"
+        },
+        {
+          "field": "temperature_measured",
+          "equals": "yes"
+        }
+      ],
+      "choices": [
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "temperature_unit",
+      "section": "S-temperature",
+      "text": "Was that Celsius or Fahrenheit?",
+      "value_type": "unit",
+      "definition": "Was that Celsius or Fahrenheit?",
+      "source_ids": [
+        "DESIGN"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [
+        {
+          "field": "feverish",
+          "equals": "yes"
+        },
+        {
+          "field": "temperature_measured",
+          "equals": "yes"
+        }
+      ],
+      "choices": [
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "temperature_time",
+      "section": "S-temperature",
+      "text": "When did you take that temperature?",
+      "value_type": "text",
+      "definition": "When did you take that temperature?",
+      "source_ids": [
+        "DESIGN"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [
+        {
+          "field": "feverish",
+          "equals": "yes"
+        },
+        {
+          "field": "temperature_measured",
+          "equals": "yes"
+        }
+      ],
+      "choices": [
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "allergies",
+      "section": "A",
+      "text": "Do you have any known allergies?",
+      "value_type": "yes_no",
+      "definition": "Do you have any known allergies?",
+      "source_ids": [
+        "BEC_SAMPLE"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [],
+      "choices": [
+        "yes",
+        "no",
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "allergy_details",
+      "section": "A",
+      "text": "What are you allergic to?",
+      "value_type": "text",
+      "definition": "What are you allergic to?",
+      "source_ids": [
+        "BEC_SAMPLE"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [
+        {
+          "field": "allergies",
+          "equals": "yes"
+        }
+      ],
+      "choices": [
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "allergy_reaction",
+      "section": "A",
+      "text": "What happens when you have an allergic reaction?",
+      "value_type": "text",
+      "definition": "What happens when you have an allergic reaction?",
+      "source_ids": [
+        "BEC_SAMPLE"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [
+        {
+          "field": "allergies",
+          "equals": "yes"
+        }
+      ],
+      "choices": [
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "medicines",
+      "section": "M",
+      "text": "Are you taking any medicines, supplements, or traditional remedies?",
+      "value_type": "yes_no",
+      "definition": "Are you taking any medicines, supplements, or traditional remedies?",
+      "source_ids": [
+        "BEC_SAMPLE"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [],
+      "choices": [
+        "yes",
+        "no",
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "medicine_list",
+      "section": "M",
+      "text": "What are their names?",
+      "value_type": "text",
+      "definition": "What are their names?",
+      "source_ids": [
+        "BEC_SAMPLE"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [
+        {
+          "field": "medicines",
+          "equals": "yes"
+        }
+      ],
+      "choices": [
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "medicine_last",
+      "section": "M",
+      "text": "When did you last take them?",
+      "value_type": "text",
+      "definition": "Preserve names and times as reported text; do not invent pairings for a list.",
+      "source_ids": [
+        "BEC_SAMPLE"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [
+        {
+          "field": "medicines",
+          "equals": "yes"
+        }
+      ],
+      "choices": [
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "medicine_changes",
+      "section": "M",
+      "text": "Have you recently started, stopped, or changed any of them?",
+      "value_type": "text",
+      "definition": "Have you recently started, stopped, or changed any of them?",
+      "source_ids": [
+        "DESIGN"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [
+        {
+          "field": "medicines",
+          "equals": "yes"
+        }
+      ],
+      "choices": [
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "conditions",
+      "section": "P",
+      "text": "Do you have any ongoing medical conditions?",
+      "value_type": "yes_no",
+      "definition": "Do you have any ongoing medical conditions?",
+      "source_ids": [
+        "BEC_SAMPLE"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [],
+      "choices": [
+        "yes",
+        "no",
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "condition_details",
+      "section": "P",
+      "text": "What medical conditions do you have?",
+      "value_type": "text",
+      "definition": "What medical conditions do you have?",
+      "source_ids": [
+        "BEC_SAMPLE"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [
+        {
+          "field": "conditions",
+          "equals": "yes"
+        }
+      ],
+      "choices": [
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "similar_before",
+      "section": "P",
+      "text": "Have you had a similar problem before?",
+      "value_type": "yes_no",
+      "definition": "Have you had a similar problem before?",
+      "source_ids": [
+        "DESIGN"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [],
+      "choices": [
+        "yes",
+        "no",
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "similar_details",
+      "section": "P",
+      "text": "What happened that time?",
+      "value_type": "text",
+      "definition": "What happened that time?",
+      "source_ids": [
+        "DESIGN"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [
+        {
+          "field": "similar_before",
+          "equals": "yes"
+        }
+      ],
+      "choices": [
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "last_intake",
+      "section": "L",
+      "text": "What did you last eat or drink, and when?",
+      "value_type": "text",
+      "definition": "Preserve what and when as one narrative; missing detail remains missing, never inferred.",
+      "source_ids": [
+        "BEC_SAMPLE"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [],
+      "choices": [
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "event",
+      "section": "E",
+      "text": "What were you doing when this started?",
+      "value_type": "text",
+      "definition": "What were you doing when this started?",
+      "source_ids": [
+        "BEC_SAMPLE"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [],
+      "choices": [
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "injury_exposure",
+      "section": "E",
+      "text": "Was there an injury, bite, sting, or contact with a chemical or substance?",
+      "value_type": "yes_no",
+      "definition": "Any listed event is yes; this prototype does not assess its severity.",
+      "source_ids": [
+        "BEC_SAMPLE"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [],
+      "choices": [
+        "yes",
+        "no",
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "event_details",
+      "section": "E",
+      "text": "Please describe what happened.",
+      "value_type": "text",
+      "definition": "Please describe what happened.",
+      "source_ids": [
+        "BEC_SAMPLE"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [
+        {
+          "field": "injury_exposure",
+          "equals": "yes"
+        }
+      ],
+      "choices": [
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "additional",
+      "section": "review",
+      "text": "Is there anything else you want a healthcare professional to know?",
+      "value_type": "text",
+      "definition": "Is there anything else you want a healthcare professional to know?",
+      "source_ids": [
+        "DESIGN"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [],
+      "choices": [
+        "unknown",
+        "declined"
+      ]
+    },
+    {
+      "id": "review_confirmed",
+      "section": "review",
+      "text": "Is the summary accurate, or would you like to correct something?",
+      "value_type": "yes_no",
+      "definition": "yes only for explicit confirmation; no for an explicit request to correct. Extract any supplied corrections separately.",
+      "source_ids": [
+        "DESIGN"
+      ],
+      "review_status": "proposed_unreviewed",
+      "critical": false,
+      "when": [],
+      "choices": [
+        "yes",
+        "no",
+        "unknown",
+        "declined"
+      ]
+    }
+  ],
+  "critical_fields": [
+    "breathing_now",
+    "chest_now",
+    "bleeding_now",
+    "neurologic_now",
+    "faint_confused_now",
+    "swelling_now"
+  ],
+  "global_actions": [
+    "get_help_now",
+    "stop",
+    "correct",
+    "show_summary"
+  ],
+  "max_clarifications_per_field": 1,
+  "max_model_retries": 1,
+  "source_note": "SAMPLE categories are source-based; exact patient wording, ordering, branch conditions and scope gates are proposed adaptations, not validated WHO rules."
+}
