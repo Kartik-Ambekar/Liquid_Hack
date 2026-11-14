@@ -76,6 +76,71 @@ now" or "you can wait". So Sister splits the work:
   give the same result, and each decision names the rule that fired.
 - **Scans never set urgency.** The model's description is recorded for the clinician only.
 
+## Clinical design
+
+We did not invent a medical interview. We started from the frameworks that frontline health workers are
+already trained on, read their scope limits carefully, and built only the part that a patient can safely do
+alone with a machine. The full source map, with the limit of each source, is in
+[SOURCES.md](docs/sister-questionnaire-v1/SOURCES.md), and the design reasoning is in
+[SISTER_CLINICAL_PROTOCOL_HANDOFF.md](docs/SISTER_CLINICAL_PROTOCOL_HANDOFF.md).
+
+### What we built on
+
+| Source | What Sister takes from it | What we deliberately left out |
+|---|---|---|
+| [WHO–ICRC Basic Emergency Care (2018)](https://www.who.int/publications/i/item/basic-emergency-care-approach-to-the-acutely-ill-and-injured) | The **SAMPLE history**: Signs and symptoms, Allergies, Medications, Past history, Last oral intake, Events. It is the standard history a first-contact provider takes in a low-resource setting. | The ABCDE assessment. It needs examination and hands-on action, which a patient talking to a device cannot do. |
+| [AHA / American Red Cross 2024 First Aid Guidelines](https://cpr.heart.org/en/resuscitation-science/2024-first-aid-guidelines) | Six "get help now" questions on recognised emergencies: trouble breathing, chest pain or pressure, heavy bleeding, stroke signs (speech, face, one-sided weakness), new confusion or faintness, and tongue or throat swelling. | Any claim to be a complete emergency screen. Six questions cannot cover every emergency, and we say so. |
+| [WHO Interagency Integrated Triage Tool](https://www.who.int/tools/triage) | The understanding of what facility triage is, so that we do not imitate it. | Its colour categories and age bands. They are for trained staff in an emergency unit, not a self-service interview. |
+| WHO IMAI, IMCI and SMART Guidelines | Reviewed as candidates. SMART Guidelines shaped how each question carries an ID, a definition, a source and a review status. | IMAI and IMCI are written for clinicians and for children respectively, so neither is encoded. |
+
+### How the interview is built
+
+The 41 possible questions in [questionnaire.json](docs/sister-questionnaire-v1/questionnaire.json) are
+conditional, so a patient is asked only the ones that apply:
+
+| Block | Questions | Purpose |
+|---|---|---|
+| Setup and scope | 4 | Consent, answering for yourself, adult only, not pregnant or recently delivered |
+| Safety screen | 6 | The "get help now" questions above |
+| **S**igns and symptoms | 14 | Main complaint, with pain and temperature follow-ups |
+| **A**llergies | 3 | |
+| **M**edications | 4 | |
+| **P**ast history | 4 | |
+| **L**ast oral intake | 1 | |
+| **E**vents | 3 | What led up to this, including injury |
+| Review | 2 | The patient checks and confirms the record |
+
+### Safety rules the SAMPLE interview holds to
+
+These come from how triage tools fail in practice: false reassurance, silence read as "no", and a model
+quietly overriding a rule.
+
+- **Sister never tells anyone they are fine.** No path ends in "low risk", "safe to wait" or "self-care". The
+  outcomes are: get help now, handover ready, assessment incomplete, out of scope, or stopped.
+- **"I don't know" is never treated as "no".** Unknown, declined and ambiguous answers are stored as such
+  and shown to the clinician. A safety question that stays unresolved ends as "assessment incomplete".
+- **A safety answer is checked on every turn,** even if the patient mentions it while answering a different
+  question, and it interrupts the interview at once.
+- **"Get help now" latches.** Once raised, a later denial or a model failure cannot clear it.
+- **Silence is not an answer.** No timeout produces a clinical conclusion.
+- **The patient confirms what was heard** before a spoken answer is used, and can correct any answer. A
+  correction re-runs the routing.
+- **Out of scope is stated, not guessed.** Children, pregnancy or recent birth, and injuries are routed out
+  with the help option still visible; being out of scope is never presented as low urgency.
+- **The model never sets a clinical field.** Routing and decisions are code; the model handles words.
+- **Scans do not change urgency.** A description is recorded for the clinician only.
+
+The earlier four-step demo predates this work. Its keyword rules in `backend/triage_rules.py` still include
+a self-care outcome and are kept to show the spoken rule decision end to end, not as clinical content.
+
+### What a clinician still has to do
+
+Our research was a curated reading of primary sources, not a systematic evidence review, and no clinician
+has reviewed the wording or the rules. Every question is marked `proposed_unreviewed` in the data so that
+status cannot be lost. The review queue in [SOURCES.md](docs/sister-questionnaire-v1/SOURCES.md) lists what
+comes next: missing emergency presentations, whether patients understand the wording, local referral
+actions, and how often a model mishears or misreads an answer. No WHO or AHA endorsement is implied.
+
 ## Measured on the board
 
 ![Measured performance: first token about 0.1 s, about 40 tokens per second](docs/img/performance.svg)
