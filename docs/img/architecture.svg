@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#7c8aa0"/></marker>
+  </defs>
+  <rect width="1200" height="640" rx="18" fill="#0b111b"/>
+  <text x="40" y="52" fill="#e8eef7" font-size="26" font-weight="700">How Sister works: every model call stays on the board</text>
+  <text x="40" y="80" fill="#8e9bb0" font-size="15">Three Liquid AI models on the Dragonwing IQ-9075 NPU. The laptop is only a microphone and a screen.</text>
+
+  <!-- laptop -->
+  <rect x="40" y="120" width="250" height="470" rx="14" fill="#111a28" stroke="#263247"/>
+  <text x="60" y="152" fill="#8e9bb0" font-size="12" font-weight="700" letter-spacing="1.5">LAPTOP (NO INFERENCE)</text>
+  <rect x="60" y="172" width="210" height="76" rx="10" fill="#172235" stroke="#2c3a52"/>
+  <text x="76" y="202" fill="#e8eef7" font-size="16" font-weight="600">Push-to-talk mic</text>
+  <text x="76" y="226" fill="#8e9bb0" font-size="13">Hold SPACE, speak, release</text>
+  <rect x="60" y="264" width="210" height="76" rx="10" fill="#172235" stroke="#2c3a52"/>
+  <text x="76" y="294" fill="#e8eef7" font-size="16" font-weight="600">Dashboard</text>
+  <text x="76" y="318" fill="#8e9bb0" font-size="13">127.0.0.1:8765, loopback only</text>
+  <rect x="60" y="356" width="210" height="76" rx="10" fill="#172235" stroke="#2c3a52"/>
+  <text x="76" y="386" fill="#e8eef7" font-size="16" font-weight="600">Typed answers</text>
+  <text x="76" y="410" fill="#8e9bb0" font-size="13">Fallback when voice fails</text>
+  <text x="60" y="476" fill="#8e9bb0" font-size="13">Shows only what the board</text>
+  <text x="60" y="496" fill="#8e9bb0" font-size="13">prints over the serial cable.</text>
+
+  <!-- cable -->
+  <line x1="292" y1="330" x2="398" y2="330" stroke="#7c8aa0" stroke-width="2" marker-end="url(#a)" marker-start="url(#a)"/>
+  <text x="345" y="310" fill="#e8eef7" font-size="13" font-weight="600" text-anchor="middle">serial cable</text>
+  <text x="345" y="352" fill="#8e9bb0" font-size="12" text-anchor="middle">audio + text</text>
+  <text x="345" y="370" fill="#8e9bb0" font-size="12" text-anchor="middle">SHA-256 checked</text>
+  <text x="345" y="412" fill="#f08a8a" font-size="13" font-weight="700" text-anchor="middle">Wi-Fi OFF</text>
+  <text x="345" y="430" fill="#f08a8a" font-size="12" text-anchor="middle">no cloud calls</text>
+
+  <!-- board -->
+  <rect x="400" y="120" width="760" height="470" rx="14" fill="#0f1c1f" stroke="#2bb8a6" stroke-width="1.5"/>
+  <text x="420" y="152" fill="#4fd1c0" font-size="12" font-weight="700" letter-spacing="1.5">DRAGONWING IQ-9075 · HEXAGON NPU · ZETIC IXIAN RUNTIME</text>
+
+  <rect x="420" y="172" width="220" height="110" rx="10" fill="#12302e" stroke="#2bb8a6"/>
+  <text x="436" y="198" fill="#4fd1c0" font-size="12" font-weight="700">1 · HEAR AND SEE</text>
+  <text x="436" y="224" fill="#e8eef7" font-size="17" font-weight="700">LFM3-Omni-2B</text>
+  <text x="436" y="247" fill="#b6c2d4" font-size="13">Speech to text (WAV, 30 s max)</text>
+  <text x="436" y="266" fill="#b6c2d4" font-size="13">Scan to plain description</text>
+
+  <rect x="680" y="172" width="220" height="110" rx="10" fill="#3a1a22" stroke="#e05a6b"/>
+  <text x="696" y="198" fill="#f08a8a" font-size="12" font-weight="700">2 · DECIDE (CODE, NO MODEL)</text>
+  <text x="696" y="224" fill="#e8eef7" font-size="17" font-weight="700">Red-flag rule engine</text>
+  <text x="696" y="247" fill="#b6c2d4" font-size="13">Runs after every answer</text>
+  <text x="696" y="266" fill="#b6c2d4" font-size="13">Unclear input: higher urgency</text>
+
+  <rect x="940" y="172" width="200" height="110" rx="10" fill="#12302e" stroke="#2bb8a6"/>
+  <text x="956" y="198" fill="#4fd1c0" font-size="12" font-weight="700">3 · EXPLAIN</text>
+  <text x="956" y="224" fill="#e8eef7" font-size="17" font-weight="700">LFM3-1.7B</text>
+  <text x="956" y="247" fill="#b6c2d4" font-size="13">Rewords the rule's decision</text>
+  <text x="956" y="266" fill="#b6c2d4" font-size="13">Cannot change it</text>
+
+  <line x1="640" y1="227" x2="678" y2="227" stroke="#7c8aa0" stroke-width="2" marker-end="url(#a)"/>
+  <line x1="900" y1="227" x2="938" y2="227" stroke="#7c8aa0" stroke-width="2" marker-end="url(#a)"/>
+
+  <rect x="940" y="322" width="200" height="110" rx="10" fill="#12302e" stroke="#2bb8a6"/>
+  <text x="956" y="348" fill="#4fd1c0" font-size="12" font-weight="700">4 · SPEAK</text>
+  <text x="956" y="374" fill="#e8eef7" font-size="17" font-weight="700">LFM3-Audio-2B</text>
+  <text x="956" y="397" fill="#b6c2d4" font-size="13">Speech out of the board speaker</text>
+  <text x="956" y="416" fill="#b6c2d4" font-size="13">First audio in about 0.1 s</text>
+  <line x1="1040" y1="282" x2="1040" y2="320" stroke="#7c8aa0" stroke-width="2" marker-end="url(#a)"/>
+
+  <rect x="420" y="322" width="220" height="110" rx="10" fill="#172235" stroke="#2c3a52"/>
+  <text x="436" y="348" fill="#8e9bb0" font-size="12" font-weight="700">OUTPUT · FOR THE CLINIC</text>
+  <text x="436" y="374" fill="#e8eef7" font-size="17" font-weight="700">Handover note</text>
+  <text x="436" y="397" fill="#b6c2d4" font-size="13">Complaint, timeline, red flags,</text>
+  <text x="436" y="416" fill="#b6c2d4" font-size="13">scan observations, urgency</text>
+
+  <rect x="680" y="322" width="220" height="110" rx="10" fill="#172235" stroke="#2c3a52"/>
+  <text x="696" y="348" fill="#8e9bb0" font-size="12" font-weight="700">OUTPUT · FOR REVIEW</text>
+  <text x="696" y="374" fill="#e8eef7" font-size="17" font-weight="700">Audit log (JSONL)</text>
+  <text x="696" y="397" fill="#b6c2d4" font-size="13">Every turn, rule and latency,</text>
+  <text x="696" y="416" fill="#b6c2d4" font-size="13">fsync'd to the board's disk</text>
+  <line x1="790" y1="282" x2="790" y2="320" stroke="#7c8aa0" stroke-width="2" marker-end="url(#a)"/>
+  <path d="M740 282 L740 302 L530 302 L530 320" fill="none" stroke="#7c8aa0" stroke-width="2" marker-end="url(#a)"/>
+
+  <rect x="420" y="468" width="720" height="98" rx="10" fill="#0b1517" stroke="#1f4a45" stroke-dasharray="5 5"/>
+  <text x="440" y="500" fill="#e8eef7" font-size="16" font-weight="700">The model explains. Code decides.</text>
+  <text x="440" y="526" fill="#b6c2d4" font-size="13.5">Models turn speech and scans into words, and turn the decision into kind, simple language.</text>
+  <text x="440" y="547" fill="#b6c2d4" font-size="13.5">Urgency comes from rules in code, so it is repeatable and every decision names the rule that fired.</text>
+</svg>
