@@ -79,6 +79,9 @@ const btnCaptureFrame = document.getElementById("btn-capture-frame");
 const btnCloseCamera = document.getElementById("btn-close-camera");
 const btnCancelCamera = document.getElementById("btn-cancel-camera");
 
+// Input Bar Camera Button (F9 - alongside mic)
+const btnInputCamera = document.getElementById("btn-input-camera");
+
 // Initialization
 document.addEventListener("DOMContentLoaded", () => {
   setupEventListeners();
@@ -111,6 +114,7 @@ function setupEventListeners() {
 
   // Camera
   btnOpenCamera.addEventListener("click", openCameraModal);
+  btnInputCamera.addEventListener("click", openCameraModal);
   btnCloseCamera.addEventListener("click", closeCameraModal);
   btnCancelCamera.addEventListener("click", closeCameraModal);
   btnCaptureFrame.addEventListener("click", captureCameraFrame);
