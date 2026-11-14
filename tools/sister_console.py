@@ -45,7 +45,8 @@ PREROLL = int(RATE * 0.35)    # speech just before the key registered is kept
 MIN_SPEECH = int(RATE * 0.5)
 MAX_SPEECH = RATE * 28        # the board accepts up to 30 seconds
 # Default: the SAMPLE history interview (sister_cli.py, backend/sample_interview.py).
-START_CMD = b"cd ~/sister && python3 -W ignore sister_cli.py --speak --no-explain\n"
+# SISTER_SHORT=1 asks only the first half of the questionnaire, which is what fits a demo.
+START_CMD = b"cd ~/sister && SISTER_SHORT=1 python3 -W ignore sister_cli.py --speak --no-explain\n"
 # --classic: the earlier four-step voice demo.
 CLASSIC_CMD = b"cd ~/sister && python3 -W ignore sister_voice_demo.py --speak\n"
 STATE_DIR = Path(__file__).resolve().parent.parent / ".sister_console"

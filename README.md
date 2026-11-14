@@ -223,12 +223,14 @@ python3 sister_cli.py            # terminal version, add --speak for voice
 - **The SAMPLE interview ran on the board in part (2026-11-13):** the consent questions, the safety screen,
   one spoken answer with transcript confirmation, and the HELP_NOW outcome, each question spoken by the board.
   The rest of the questionnaire, corrections and the summary review were not run there.
-- **Its model-based extractor does not run on the board yet.** The extraction prompt (instructions, schema,
-  examples and 41 field definitions, about 10,000 characters) does not fit the 2,048-token context the board
-  wrapper gives LFM3-1.7B, so it is skipped rather than sent. A plain "yes", "no" or "I don't know" is matched
-  to the question's own choices in code; a free-text question keeps the patient's own words for that one
-  field; a yes/no question otherwise asks for an explicit answer. The free-text path was exercised on the
-  laptop only. The extractor's tests use model test doubles, so they check routing, not extraction accuracy.
+- **Extraction on the board uses a compact prompt.** The full extraction prompt (schema, examples and 41
+  field definitions, about 10,000 characters) does not fit the 2,048-token context the board wrapper gives
+  LFM3-1.7B, so the board sends a short one: the instructions, the current question and the six safety
+  fields. The model may fill only those fields, and for a safety field it was not asked about it may report
+  "yes" but never "no". If its JSON is invalid, a free-text question keeps the patient's own words and a
+  yes/no question asks for an explicit answer. A plain "yes", "no" or "I don't know" never goes to the model.
+- **The console starts the short version** (`SISTER_SHORT=1`): the second half of the SAMPLE history
+  (allergies, medicines, past history, last intake, events) is not asked, and the summary says so.
 - **The board has no working microphone,** so the laptop records the patient's voice and sends it over the serial cable. Sister's speech is generated on the board and played through the board's speaker.
 - `tests/test_direct_units.py`, `test_in_process.py` and `test_end_to_end.py` were written for an earlier
   simulated engine and have not been updated.

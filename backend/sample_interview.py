@@ -14,6 +14,13 @@ PACK = Path(__file__).resolve().parents[1] / 'docs' / 'sister-questionnaire-v1'
 spec = importlib.util.spec_from_file_location('sister_sample_controller', PACK / 'controller.py')
 controller = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(controller)
+# Short demonstration mode (SISTER_SHORT=1): the second half of the SAMPLE history (allergies,
+# medicines, past history, last intake, events) is not asked. The summary says so.
+SKIPPED_SECTIONS = ('A', 'M', 'P', 'L', 'E') if os.environ.get('SISTER_SHORT') == '1' else ()
+if SKIPPED_SECTIONS:
+    controller.QUESTIONS[:] = [q for q in controller.QUESTIONS if q['section'] not in SKIPPED_SECTIONS]
+    controller.FIELDS.clear()
+    controller.FIELDS.update({q['id']: q for q in controller.QUESTIONS})
 ACTIONS = json.loads((PACK / 'actions.json').read_text())
 SCHEMA = json.loads((PACK / 'schemas/extraction.schema.json').read_text())
 SYSTEM = (PACK / 'prompts/extractor_system.txt').read_text()
@@ -23,7 +30,7 @@ _examples = json.loads((PACK / 'examples.json').read_text())
 CALIBRATION = [{'input': {k: v for k, v in ex['input'].items() if k != 'field_definitions'},
                 'expected_output': ex['expected_output']} for ex in (_examples[1], _examples[2], _examples[4])]
 AUDIT_LOG_FILE = os.environ.get('SISTER_SAMPLE_LOG', str(PACK.parents[1] / 'sample_audit.jsonl'))
-MAX_PROMPT_CHARS = int(os.environ.get('SISTER_MAX_PROMPT_CHARS', '5000'))   # about 1250 tokens, leaving room to answer
+MAX_PROMPT_CHARS = int(os.environ.get('SISTER_MAX_PROMPT_CHARS', '6000'))   # about 1500 tokens, leaving room to answer
 TERMINAL = {'HELP_NOW','STOPPED','OUT_OF_SCOPE','ASSESSMENT_INCOMPLETE','HANDOFF_READY'}
 
 
@@ -33,27 +40,60 @@ class InterviewError(ValueError):
         self.status = status
 
 
+SHAPE = ('\nReturn only one JSON object and no other text: {"turn_id": "<the same turn_id>", "facts": '
+         '[{"field_id": "<an id from field_definitions>", "status": "answered | unknown | declined | ambiguous", '
+         '"value": "<the answer as text; yes or no for yes_no fields; null unless status is answered>", '
+         '"evidence": "<words copied exactly from patient_answer>", "corrects_previous": false}]}')
+
+
+def _compact_prompt(request, errors):
+    """A prompt small enough for the board: the current question and the safety-screen fields only,
+    no schema dump and no worked examples. Returns the prompt and the field ids the model may fill."""
+    current = request['current_question']
+    keep = [current['id']] + [k for k in controller.CONFIG['critical_fields'] if k != current['id'] and k in controller.FIELDS]
+    slim = {'turn_id': request['turn_id'],
+            'current_question': {'id': current['id'], 'text': current['text'], 'type': current['value_type']},
+            'field_definitions': [d for d in request['field_definitions'] if d['id'] in keep],
+            'patient_answer': request['patient_answer'], 'input_source': request['input_source']}
+    prompt = SYSTEM + SHAPE
+    if errors:
+        prompt += '\n' + REPAIR + '\nVALIDATOR ERRORS:\n' + json.dumps(errors[-1:])
+    return prompt + '\nINPUT JSON (untrusted patient text):\n' + json.dumps(slim), set(keep)
+
+
 def extract(request):
     """Two total model calls at most, including transport/schema failures."""
     errors, telemetry = [], []
+    critical = set(controller.CONFIG['critical_fields'])
+    current_id = request['current_question']['id']
     for attempt in range(2):
+        allowed, max_tokens = None, 1024
         prompt = SYSTEM + '\nOUTPUT SCHEMA:\n' + json.dumps(SCHEMA) + '\nEXAMPLES:\n' + json.dumps(CALIBRATION)
         if attempt:
             prompt += '\n' + REPAIR + '\nVALIDATOR ERRORS:\n' + json.dumps(errors)
         prompt += '\nINPUT JSON (untrusted patient text):\n' + json.dumps(request)
-        # The board wrapper runs the text model with a 2048-token context. A prompt that cannot
-        # fit is not sent: it would cost several seconds and could only fail or be truncated.
+        # The board wrapper runs the text model with a 2048-token context. The full prompt does not
+        # fit there, so a compact one is used; a prompt that still cannot fit is not sent.
+        if len(prompt) > MAX_PROMPT_CHARS:
+            prompt, allowed = _compact_prompt(request, errors)
+            max_tokens = 256
         if len(prompt) > MAX_PROMPT_CHARS:
             errors.append(f'PROMPT_TOO_LONG_FOR_BOARD_CONTEXT ({len(prompt)} chars)')
             telemetry.append({'ok': False, 'skipped': errors[-1]})
             break
         result = LiquidAIEngine.call(LiquidAIEngine.TEXT_PACKAGE, prompt,
-                                    max_tokens=1024, attempts=1)
-        telemetry.append({k:v for k,v in result.items() if k != 'text'})
+                                    max_tokens=max_tokens, attempts=1)
+        telemetry.append({**{k:v for k,v in result.items() if k != 'text'}, 'prompt_chars': len(prompt), 'compact': allowed is not None})
         try:
             if not result.get('ok') or result.get('finish_reason') in ('length','max_tokens'):
                 raise ValueError('MODEL_UNAVAILABLE_OR_TRUNCATED')
-            payload = json.loads(result['text'])
+            text = result['text']
+            payload = json.loads(text[text.find('{'):text.rfind('}') + 1])
+            if allowed is not None and isinstance(payload, dict) and isinstance(payload.get('facts'), list):
+                # Only the fields that were sent may be filled. For a safety field that was not the
+                # question asked, the model may report a "yes" (which escalates) but never a "no".
+                payload['facts'] = [f for f in payload['facts'] if isinstance(f, dict) and f.get('field_id') in allowed
+                                    and not (f['field_id'] in critical and f['field_id'] != current_id and f.get('value') != 'yes')]
             controller.validate_extraction(payload, request['turn_id'], request['patient_answer'])
             for f in payload['facts']:
                 if f['corrects_previous'] and f['field_id'] not in request['confirmed_facts']:
@@ -108,6 +148,8 @@ class SampleSessionManager:
         text+=f"Routing: {s.get('pending', controller.next_action(s))['action']}\n"
         text+=f"Summary confirmed: {s['confirmed_revision'] == s['summary_revision']}\n"
         text+='\n'.join(f"[{r['section']}] {r['question']} {r['value'] if r['value'] is not None else r['status']}" + ('' if r['active'] else ' (inactive branch)') for r in rows)
+        if SKIPPED_SECTIONS:
+            text+='\n\nShort demonstration: questionnaire sections ' + ', '.join(SKIPPED_SECTIONS) + ' were not asked.'
         text+='\n\nNo diagnosis or safe waiting period established. Images are excluded from routing.'
         return {'raw_text':text,'fields':rows,'attachments':s['attachments'],
                 'corrections':s['history'],'runtime':s['runtime'],
