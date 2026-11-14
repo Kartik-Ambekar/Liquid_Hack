@@ -102,6 +102,10 @@ python3 tools/sister_console.py --start
 This opens the serial console, starts Sister on the board in speaking mode, and serves the dashboard at
 `http://127.0.0.1:8765` (loopback only, no external assets). Hold SPACE to talk and release to send.
 
+By default it starts the SAMPLE history interview (`sister_cli.py`). Add `--classic`, or use the dashboard's
+"Four-step demo" button, for the earlier interview with the rule decision, scan description and spoken
+explanation (`sister_voice_demo.py`). The judge script below uses the four-step demo.
+
 On the board itself, with the models staged in `~/zetic-demo`:
 
 ```bash
@@ -114,7 +118,7 @@ Type an answer or a choice number, `v samples/sample_patient_answer.wav` to answ
 ### Two-minute judge script
 
 1. Turn the board's Wi-Fi off: `sudo nmcli radio wifi off`, then `nmcli -p device`.
-2. Start the console and open the dashboard.
+2. Start the console with `--classic` and open the dashboard.
 3. Answer Sister's questions by voice. Say a red-flag symptom such as slurred speech.
 4. Show the red decision banner with the rule ID, and hear Sister explain it aloud.
 5. Show the model timing lines and the audit log lines in the board log panel.
@@ -145,8 +149,15 @@ python3 sister_cli.py            # terminal version, add --speak for voice
   untested.
 - **`backend/imaging_analyzer.py` is not a model.** It is pixel heuristics from an earlier version, and its
   bounding boxes do not come from a model.
-- **The SAMPLE interview has not been run on the board with the voice console.** Its tests use model test
-  doubles, so they check routing and integration, not extraction accuracy.
+- **The SAMPLE interview ran on the board in part (2026-11-13):** the consent questions, the safety screen,
+  one spoken answer with transcript confirmation, and the HELP_NOW outcome, each question spoken by the board.
+  The rest of the questionnaire, corrections and the summary review were not run there.
+- **Its model-based extractor does not run on the board yet.** The extraction prompt (instructions, schema,
+  examples and 41 field definitions, about 10,000 characters) does not fit the 2,048-token context the board
+  wrapper gives LFM3-1.7B, so it is skipped rather than sent. A plain "yes", "no" or "I don't know" is matched
+  to the question's own choices in code; a free-text question keeps the patient's own words for that one
+  field; a yes/no question otherwise asks for an explicit answer. The free-text path was exercised on the
+  laptop only. The extractor's tests use model test doubles, so they check routing, not extraction accuracy.
 - **The board has no working microphone,** so the laptop records the patient's voice and sends it over the serial cable. Sister's speech is generated on the board and played through the board's speaker.
 - `tests/test_direct_units.py`, `test_in_process.py` and `test_end_to_end.py` were written for an earlier
   simulated engine and have not been updated.

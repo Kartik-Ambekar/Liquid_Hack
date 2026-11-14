@@ -185,7 +185,8 @@ class Console:
                     time.sleep(0.3)
                     self.write_serial(b"\x03")
                     time.sleep(0.5)
-                self.write_serial(b"\x15" + self.start_cmd)
+                mode = payload.get("mode")
+                self.write_serial(b"\x15" + (CLASSIC_CMD if mode == "classic" else START_CMD if mode == "sample" else self.start_cmd))
 
     def send(self, speech):
         seconds = len(speech) / RATE

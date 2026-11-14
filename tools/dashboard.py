@@ -225,7 +225,8 @@ pre{margin:0;max-height:38vh;overflow:auto;font:12px/1.4 ui-monospace,SFMono-Reg
   <span class="pill" id="p-mic">laptop mic: ...</span>
   <span class="pill">inference: on the board (Dragonwing IQ-9075)</span>
   <span class="spacer"></span>
-  <button id="start" class="primary">Start conversation</button>
+  <button id="start-classic">Four-step demo</button>
+  <button id="start" class="primary">Start SAMPLE interview</button>
 </header>
 <main>
   <section>
@@ -258,7 +259,7 @@ function render(s) {
   pill($("p-board"), s.board_seen === null ? "board: no output yet" : "board: connected over serial", s.board_seen !== null);
   pill($("p-sister"), s.running ? "Sister: running" : "Sister: not running", s.running);
   pill($("p-mic"), "laptop mic: " + (s.mic === "idle" ? "ready" : s.mic), s.mic === "recording" ? false : true);
-  $("start").textContent = s.running ? "New conversation" : "Start conversation";
+  $("start").textContent = s.running ? "New SAMPLE interview" : "Start SAMPLE interview";
   const sisterBusy = ["speaking", "transcribing", "thinking", "looking"].includes(s.phase);
   const ts = $("t-sister"), ty = $("t-you");
   ts.className = "turn sister" + (sisterBusy ? " active " + (s.phase === "speaking" ? "speaking" : "working") : "");
@@ -319,7 +320,8 @@ $("hold").addEventListener("pointerdown", e => { e.preventDefault(); press(); })
 ["pointerup", "pointerleave", "pointercancel"].forEach(n => $("hold").addEventListener(n, release));
 $("hold").addEventListener("keydown", e => e.preventDefault());
 $("form").addEventListener("submit", e => { e.preventDefault(); const t = $("text").value.trim(); if (t) post("/send", {text: t}); $("text").value = ""; $("text").blur(); });
-$("start").addEventListener("click", () => { $("talk").textContent = ""; post("/start"); $("start").blur(); });
+$("start").addEventListener("click", () => { $("talk").textContent = ""; post("/start", {mode: "sample"}); $("start").blur(); });
+$("start-classic").addEventListener("click", () => { $("talk").textContent = ""; post("/start", {mode: "classic"}); $("start-classic").blur(); });
 tick();
 </script></body></html>
 """
