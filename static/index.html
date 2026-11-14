@@ -74,7 +74,7 @@
         </div>
       </div>
 
-      <!-- Input Controls (Voice First + Typed Fallback) -->
+      <!-- Input Controls (Voice First + Camera + Typed Fallback) -->
       <div class="input-bar">
         <button id="btn-record-voice" class="voice-record-btn" title="Speak Answer (Up to 30s)">
           <div class="mic-inner">
@@ -86,6 +86,16 @@
             </svg>
           </div>
           <span id="record-label" class="record-text">Hold to Speak</span>
+        </button>
+
+        <button id="btn-input-camera" class="camera-input-btn" title="Open Camera to Scan X-Ray / MRI (F9)">
+          <div class="cam-inner">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+          </div>
+          <span class="record-text">Scan</span>
         </button>
 
         <form id="text-input-form" class="text-form">

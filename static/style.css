@@ -426,6 +426,46 @@ body {
   to { box-shadow: 0 0 16px #EF4444; }
 }
 
+/* Camera Input Button (F9 - alongside mic) */
+.camera-input-btn {
+  background: linear-gradient(135deg, #0284C7, #38BDF8);
+  color: white;
+  border: none;
+  border-radius: 9999px;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(56, 189, 248, 0.4);
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.camera-input-btn:hover {
+  background: linear-gradient(135deg, #0369A1, #0EA5E9);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(56, 189, 248, 0.5);
+}
+
+.camera-input-btn.active {
+  background: #065F46;
+  animation: camGlow 1s infinite alternate;
+}
+
+@keyframes camGlow {
+  from { box-shadow: 0 0 4px #10B981; }
+  to { box-shadow: 0 0 16px #10B981; }
+}
+
+.cam-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .text-form {
   flex: 1;
   display: flex;
