@@ -17,7 +17,7 @@ prints a handover note for the clinician. All of it runs on one board with the W
 
 ![The Sister dashboard during a real session on the board](docs/img/dashboard.png)
 
-*The dashboard during a real session: the patient said "I've got slurred speech", rule `RULE-EM-02` fired,
+*The dashboard during a real four-step demo session: the patient said "I've got slurred speech", rule `RULE-EM-02` fired,
 and Sister spoke the result. Every line on this page was parsed from what the board printed over the serial cable.*
 
 ## Why this is not a cloud API call
@@ -30,6 +30,10 @@ and Sister spoke the result. Every line on this page was parsed from what the bo
 | **Flat cost** | One board, no per-request fee, however many patients are seen. |
 
 ## How it works
+
+Sister has two interviews. The steps below describe the four-step demo, which ran end to end on the board
+with a rule decision and spoken explanation. The console now starts the longer
+[SAMPLE history interview](#sample-history-interview) by default; it uses the same speech models.
 
 ![Architecture: laptop as microphone and screen, three Liquid models and a rule engine on the board](docs/img/architecture.svg)
 
@@ -55,7 +59,7 @@ model, no hosted API and no fallback.
 |---|---|---|
 | Speech to text | `LiquidAI/LFM3-Omni-2B` | One WAV, up to 30 s, 128 tokens |
 | Scan description | `LiquidAI/LFM3-Omni-2B` | One 512x512 image, 120 tokens, observations only |
-| Plain-language explanation and answer extraction | `LiquidAI/LFM3-1.7B` | 160 tokens, at most two attempts |
+| Plain-language explanation | `LiquidAI/LFM3-1.7B` | 160 tokens, at most two attempts |
 | Text to speech | `LiquidAI/LFM3-Audio-2B` | Female voice, American English |
 
 Nothing is simulated. If a model is missing or its answer fails validation, the call returns an error and
@@ -127,9 +131,11 @@ Type an answer or a choice number, `v samples/sample_patient_answer.wav` to answ
 
 A second, longer interview follows the SAMPLE history format: 41 possible questions with conditional
 branches and explicit "unknown" and "declined" answers
-([questionnaire](docs/sister-questionnaire-v1/QUESTIONNAIRE.md)). LFM3-1.7B extracts structured answers
-from free text against a JSON schema, with at most two attempts; malformed output produces a visible error,
-never invented patient facts. Reported safety concerns interrupt the interview, and no branch recommends
+([questionnaire](docs/sister-questionnaire-v1/QUESTIONNAIRE.md)). Each question is spoken by the board, and a spoken
+answer is transcribed there and confirmed by the patient before it is used. Yes, no and "I don't know" are
+matched to the question's choices in code. An LFM3-1.7B extractor for free-text answers is written and
+tested with test doubles, but its prompt does not fit the board's 2,048-token context yet, so on the board a
+free-text answer is kept in the patient's own words. Nothing is ever invented. Reported safety concerns interrupt the interview, and no branch recommends
 self-care. The summary can be edited and downloaded.
 
 ```bash
