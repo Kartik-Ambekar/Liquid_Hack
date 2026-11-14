@@ -92,10 +92,13 @@ def receive_upload():
     except Exception:
         pass
     print("  receiving audio from the laptop microphone...", flush=True)
-    chunks, expected = [], ""
+    chunks, expected, fmt, rate = [], "", "pcm16", 12000
     try:
         for line in sys.stdin:
             line = line.strip()
+            if line.startswith("FMT "):          # e.g. "FMT ulaw 12000" from tools/sister_console.py
+                fmt, rate = line.split()[1], int(line.split()[2])
+                continue
             if line.startswith("END"):
                 expected = line[3:].strip()
                 break
@@ -110,7 +113,9 @@ def receive_upload():
     if not pcm or hashlib.sha256(pcm).hexdigest() != expected:
         print("  the recording was damaged on the way here. Please say it again, or type your answer.")
         return None
-    pcm, _ = audioop.ratecv(pcm, 2, 1, 12000, 16000, None)
+    if fmt == "ulaw":
+        pcm = audioop.ulaw2lin(pcm, 2)
+    pcm, _ = audioop.ratecv(pcm, 2, 1, rate, 16000, None)
     WORK_DIR.mkdir(parents=True, exist_ok=True)
     path = WORK_DIR / "from_laptop.wav"
     with wave.open(str(path), "wb") as out:
@@ -184,21 +189,36 @@ def main():
     session = SessionManager.create_session()
     sid = session["session_id"]
     response = SessionManager.get_initial_prompt()
+    repeat_prompt_only = False
     while True:
-        say(response.get("sister_message", ""), response.get("spoken_text"))
+        if repeat_prompt_only:          # an empty line: show the prompt again without re-asking aloud
+            repeat_prompt_only = False
+            try:
+                raw = input("YOU> ").strip()
+            except EOFError:
+                return 1
+            if not raw:
+                repeat_prompt_only = True
+                continue
+            choices = response.get("choices", [])
+        else:
+            raw = None
+            say(response.get("sister_message", ""), response.get("spoken_text"))
         if response.get("status") in ("completed", "error"):
             break
         choices = response.get("choices", [])
-        for index, choice in enumerate(choices, 1):
+        for index, choice in enumerate(choices if raw is None else [], 1):
             print(f"   {index}. " + re.sub(r"[^\x20-\x7e]+", "", choice["label"]).strip())  # serial console is ASCII
-        if response.get("step") in ("GREETING_INGEST", "AWAITING_INGEST"):
-            print("   scans: " + "  ".join(f"s {i}={p.stem}" for i, p in enumerate(SAMPLES, 1)))
-        try:
-            raw = input("YOU> ").strip()
-        except EOFError:
-            return 1
-        if not raw:
-            continue
+        if raw is None:
+            if response.get("step") in ("GREETING_INGEST", "AWAITING_INGEST"):
+                print("   scans: " + "  ".join(f"s {i}={p.stem}" for i, p in enumerate(SAMPLES, 1)))
+            try:
+                raw = input("YOU> ").strip()
+            except EOFError:
+                return 1
+            if not raw:
+                repeat_prompt_only = True
+                continue
         kind, answer = "text", raw
         if raw.lower().startswith("s ") and response.get("step") in ("GREETING_INGEST", "AWAITING_INGEST"):
             response = ingest_scan(sid, raw[2:].strip())

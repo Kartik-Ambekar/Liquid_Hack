@@ -132,6 +132,12 @@ by LFM3-Audio-2B). The board has no microphone, so to answer by voice run `tools
 holds the serial console in `screen`: it records from the laptop microphone and sends the recording down the
 serial line, where the board transcribes it.
 
+**Push-to-talk console (recommended):** on the laptop that has the board's serial cable, run
+`python3 tools/sister_console.py --start`. It opens the serial console, keeps the laptop microphone open
+(needs ffmpeg), and starts Sister in speaking mode. Hold SPACE while you talk and let go to send: the recording
+goes down the serial line and is transcribed on the board. Ctrl-] quits. A terminal cannot see a key release,
+so release is detected when the key's auto-repeat stops.
+
 Type an answer, type a choice number, `v samples/patient_cough.wav` to answer by voice from a WAV file, or
 `s 5` at the scan question to attach a sample scan. The decision, the rule that fired, the model's
 explanation, the handover note and the audit log lines are printed at the end.
