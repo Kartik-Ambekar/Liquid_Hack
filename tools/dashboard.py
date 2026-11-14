@@ -26,7 +26,7 @@ class Dashboard:
         self.commands = queue.Queue()
         self.events, self.choices = [], []
         self.phase, self.cont, self.linebuf, self.log = "connecting", False, "", ""
-        self.flags = {"waiting": False, "shell": False, "mic": "idle", "level": 0.0, "seconds": 0.0}
+        self.flags = {"waiting": False, "confirm": False, "shell": False, "mic": "idle", "level": 0.0, "seconds": 0.0}
         self.last_board_output = 0.0
         handler = type("Handler", (Handler,), {"dash": self})
         self.server = ThreadingHTTPServer(("127.0.0.1", port), handler)
@@ -68,6 +68,9 @@ class Dashboard:
             self.phase = "thinking"
         elif "receiving audio" in t or "transcribing on the board" in t:
             self.phase, self.cont = "transcribing", False
+        elif "Interview outcome:" in t:
+            self.add("decision", "Interview outcome: " + t.split("outcome:", 1)[1].strip(), rule="")
+            self.cont = False
         elif "DECISION (by rule" in t:
             found = re.search(r"rule ([\w-]+)\): (.+)", t)
             self.add("decision", found[2] if found else s, rule=found[1] if found else "")
@@ -80,7 +83,7 @@ class Dashboard:
         elif s.startswith("[spoken by") or s.startswith("[LiquidAI"):
             self.add("metric", s.strip("[]"))
             self.cont = False
-        elif s.startswith(("could not", "the recording was damaged", "explanation unavailable", "(could not speak",
+        elif s.startswith(("Could not reliably", "could not", "the recording was damaged", "This answer belongs", "Invalid answer", "explanation unavailable", "(could not speak",
                            "handover note", "audit log:")):
             self.add("note", s)
             self.cont = False
@@ -102,6 +105,8 @@ class Dashboard:
             f = self.flags
             if f["mic"] != "idle":
                 phase = f["mic"]
+            elif f["confirm"]:
+                phase = "confirm"
             elif f["waiting"]:
                 phase = "waiting"
             elif f["shell"]:
@@ -109,7 +114,9 @@ class Dashboard:
             else:
                 phase = self.phase
             return {"phase": phase, "mic": f["mic"], "level": f["level"], "seconds": round(f["seconds"], 1),
-                    "running": not f["shell"] and phase != "connecting", "choices": self.choices if f["waiting"] else [],
+                    "running": not f["shell"] and phase != "connecting",
+                    "choices": ([{"n": "y", "label": "Yes, that is what I said"}, {"n": "n", "label": "No, let me answer again"}]
+                                if f["confirm"] else self.choices if f["waiting"] else []),
                     "events": self.events[since:], "seq": len(self.events), "log": self.log[-4000:],
                     "tail": self.events[-1] if self.events else None,
                     "board_seen": round(time.time() - self.last_board_output, 1) if self.last_board_output else None}
@@ -256,10 +263,12 @@ function render(s) {
   const ts = $("t-sister"), ty = $("t-you");
   ts.className = "turn sister" + (sisterBusy ? " active " + (s.phase === "speaking" ? "speaking" : "working") : "");
   $("s-sister").textContent = SISTER[s.phase] || " ";
-  const yours = ["waiting", "recording", "sending"].includes(s.phase);
+  const yours = ["waiting", "recording", "sending", "confirm"].includes(s.phase);
+  ty.dataset.phase = s.phase;
   ty.className = "turn you" + (yours ? " active" : "") + (s.phase === "recording" ? " recording" : s.phase === "sending" ? " sending" : "");
   $("s-you").textContent = s.phase === "recording" ? "Recording " + s.seconds.toFixed(1) + " s - release to send"
-    : s.phase === "sending" ? "Sending to the board..." : s.phase === "waiting" ? "Your turn: hold SPACE and talk" : " ";
+    : s.phase === "sending" ? "Sending to the board..." : s.phase === "waiting" ? "Your turn: hold SPACE and talk"
+    : s.phase === "confirm" ? "Is that what you said? Press Y or N" : " ";
   $("mic").style.transform = s.phase === "recording" ? "scale(" + (1 + Math.min(1, s.level) * 0.7).toFixed(2) + ")" : "scale(1)";
   const talk = $("talk");
   for (const e of s.events) {
@@ -268,7 +277,7 @@ function render(s) {
     d.dataset.n = e.n;
     if (e.kind === "decision") {
       d.className += /emergency/i.test(e.text) ? " emergency" : /self/i.test(e.text) ? " self" : "";
-      d.textContent = "Decision by rule " + e.rule + ": " + e.text;
+      d.textContent = e.rule ? "Decision by rule " + e.rule + ": " + e.text : e.text;
     } else {
       if (e.kind === "sister" || e.kind === "you") {
         const who = document.createElement("small");
@@ -290,7 +299,7 @@ function render(s) {
   const key = JSON.stringify(s.choices);
   if (ch.dataset.key !== key) {
     ch.dataset.key = key; ch.textContent = "";
-    for (const c of s.choices) { const b = document.createElement("button"); b.textContent = c.n + ". " + c.label; b.onclick = () => post("/send", {text: c.n}); ch.appendChild(b); }
+    for (const c of s.choices) { const b = document.createElement("button"); b.textContent = (/^\d+$/.test(c.n) ? c.n + ". " : "") + c.label; b.onclick = () => post("/send", {text: c.n}); ch.appendChild(b); }
   }
   if (s.log !== lastLog) { lastLog = s.log; const pre = $("log"); pre.textContent = s.log; pre.scrollTop = pre.scrollHeight; }
 }
@@ -304,6 +313,7 @@ function press() { if (!down) { down = true; $("hold").classList.add("down"); po
 function release() { if (down) { down = false; $("hold").classList.remove("down"); post("/ptt/stop"); } }
 document.addEventListener("keydown", e => { if (e.code === "Space" && !typing()) { e.preventDefault(); if (!e.repeat) press(); } });
 document.addEventListener("keyup", e => { if (e.code === "Space" && !typing()) { e.preventDefault(); release(); } });
+document.addEventListener("keydown", e => { if (!typing() && $("t-you").dataset.phase === "confirm" && (e.key === "y" || e.key === "n")) post("/send", {text: e.key}); });
 window.addEventListener("blur", release);
 $("hold").addEventListener("pointerdown", e => { e.preventDefault(); press(); });
 ["pointerup", "pointerleave", "pointercancel"].forEach(n => $("hold").addEventListener(n, release));

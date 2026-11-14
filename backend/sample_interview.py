@@ -23,6 +23,7 @@ _examples = json.loads((PACK / 'examples.json').read_text())
 CALIBRATION = [{'input': {k: v for k, v in ex['input'].items() if k != 'field_definitions'},
                 'expected_output': ex['expected_output']} for ex in (_examples[1], _examples[2], _examples[4])]
 AUDIT_LOG_FILE = os.environ.get('SISTER_SAMPLE_LOG', str(PACK.parents[1] / 'sample_audit.jsonl'))
+MAX_PROMPT_CHARS = int(os.environ.get('SISTER_MAX_PROMPT_CHARS', '5000'))   # about 1250 tokens, leaving room to answer
 TERMINAL = {'HELP_NOW','STOPPED','OUT_OF_SCOPE','ASSESSMENT_INCOMPLETE','HANDOFF_READY'}
 
 
@@ -40,6 +41,12 @@ def extract(request):
         if attempt:
             prompt += '\n' + REPAIR + '\nVALIDATOR ERRORS:\n' + json.dumps(errors)
         prompt += '\nINPUT JSON (untrusted patient text):\n' + json.dumps(request)
+        # The board wrapper runs the text model with a 2048-token context. A prompt that cannot
+        # fit is not sent: it would cost several seconds and could only fail or be truncated.
+        if len(prompt) > MAX_PROMPT_CHARS:
+            errors.append(f'PROMPT_TOO_LONG_FOR_BOARD_CONTEXT ({len(prompt)} chars)')
+            telemetry.append({'ok': False, 'skipped': errors[-1]})
+            break
         result = LiquidAIEngine.call(LiquidAIEngine.TEXT_PACKAGE, prompt,
                                     max_tokens=1024, attempts=1)
         telemetry.append({k:v for k,v in result.items() if k != 'text'})
@@ -181,7 +188,14 @@ class SampleSessionManager:
                     s=cls._require(session_id)
                     if s['revision']!=revision: raise InterviewError('Interview changed while processing.')
                     cls._audit(s,{'event':'EXTRACTION_ERROR','turn_id':turn_id,'error':str(exc)})
-                raise
+                # When the model cannot extract, a free-text question keeps the patient's own
+                # words for that one field. Nothing is inferred and no other field is filled.
+                # Yes/no and unit questions still require an explicit choice.
+                if controller.FIELDS[question_id]['value_type'] != 'text':
+                    raise
+                payload={'turn_id':turn_id,'facts':[{'field_id':question_id,'status':'answered',
+                    'value':user_input,'evidence':user_input,'corrects_previous':bool(snapshot['correction'])}]}
+                telemetry=[{'fallback':'verbatim_answer_for_current_text_field','extraction_error':str(exc)}]
         with cls._lock:
             s=cls._require(session_id)
             if s['revision']!=revision: raise InterviewError('Interview changed while processing. Answer was not applied.')

@@ -44,9 +44,10 @@ RELEASE_GAP = 0.30            # auto-repeat stopped for this long: the key was r
 PREROLL = int(RATE * 0.35)    # speech just before the key registered is kept
 MIN_SPEECH = int(RATE * 0.5)
 MAX_SPEECH = RATE * 28        # the board accepts up to 30 seconds
-# The four-step voice demo that was verified on the board. Older board copies name it sister_cli.py.
-START_CMD = (b"cd ~/sister && python3 -W ignore "
-             b"$([ -f sister_voice_demo.py ] && echo sister_voice_demo.py || echo sister_cli.py) --speak\n")
+# Default: the SAMPLE history interview (sister_cli.py, backend/sample_interview.py).
+START_CMD = b"cd ~/sister && python3 -W ignore sister_cli.py --speak --no-explain\n"
+# --classic: the earlier four-step voice demo.
+CLASSIC_CMD = b"cd ~/sister && python3 -W ignore sister_voice_demo.py --speak\n"
 STATE_DIR = Path(__file__).resolve().parent.parent / ".sister_console"
 ANSI = re.compile(rb"\x1b\[[0-9;?]*[A-Za-z]")
 
@@ -56,7 +57,8 @@ def note(text):
 
 
 class Console:
-    def __init__(self, port, mic, web_port=8765):
+    def __init__(self, port, mic, web_port=8765, classic=False):
+        self.start_cmd = CLASSIC_CMD if classic else START_CMD
         self.dash = Dashboard(web_port)
         self.level, self.sending = 0.0, False
         self.serial = os.open(port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
@@ -106,6 +108,10 @@ class Console:
     def waiting_for_answer(self):
         return self.tail.rstrip(b" ").endswith(b"YOU>")
 
+    def confirming(self):
+        """The SAMPLE interview asks the patient to confirm each transcript before it is used."""
+        return self.tail.rstrip(b" ").endswith(b"[y/N]")
+
     # --- microphone ------------------------------------------------------------
     def read_mic(self):
         try:
@@ -149,7 +155,7 @@ class Console:
     def sync(self):
         """Publish what the dashboard cannot work out from the board's output alone."""
         recording = self.state in ("holding", "web", "timed")
-        self.dash.update(waiting=self.waiting_for_answer(), shell=self.tail.rstrip().endswith(b"$"),
+        self.dash.update(waiting=self.waiting_for_answer(), confirm=self.confirming(), shell=self.tail.rstrip().endswith(b"$"),
                          mic="sending" if self.sending else "recording" if recording else "idle",
                          level=self.level, seconds=len(self.speech) / RATE if recording else 0.0)
 
@@ -169,7 +175,7 @@ class Console:
                 self.finish()
             elif name == "send":
                 text = str(payload.get("text", "")).replace("\n", " ").strip()[:300]
-                if text and self.waiting_for_answer():
+                if text and (self.waiting_for_answer() or self.confirming()):
                     self.write_serial(b"\x15" + text.encode() + b"\n")
                 elif text:
                     self.dash.note("Sister is not waiting for an answer yet.")
@@ -179,7 +185,7 @@ class Console:
                     time.sleep(0.3)
                     self.write_serial(b"\x03")
                     time.sleep(0.5)
-                self.write_serial(b"\x15" + START_CMD)
+                self.write_serial(b"\x15" + self.start_cmd)
 
     def send(self, speech):
         seconds = len(speech) / RATE
@@ -261,7 +267,7 @@ class Console:
             if self.waiting_for_answer():
                 note("Sister is already running on the board")
             elif self.tail.rstrip().endswith(b"$"):
-                self.write_serial(START_CMD)
+                self.write_serial(self.start_cmd)
             else:
                 note("the board is not at a shell prompt; log in or finish what is running, then start Sister")
         note(f"microphone is on. Hold SPACE to talk, release to send. Ctrl-] quits. Dashboard: http://127.0.0.1:{self.dash.port}")
@@ -288,13 +294,15 @@ def main():
     parser.add_argument("--start", action="store_true")
     parser.add_argument("--port")
     parser.add_argument("--mic", default="0", help="avfoundation audio device index (default 0)")
+    parser.add_argument("--classic", action="store_true",
+                        help="start the earlier four-step voice demo instead of the SAMPLE history interview")
     parser.add_argument("--web-port", type=int, default=8765, help="dashboard port on 127.0.0.1 (default 8765)")
     args = parser.parse_args()
     ports = sorted(glob.glob("/dev/cu.usbserial-*"))
     port = args.port or (ports[1] if len(ports) > 1 else None)   # the second port is the Linux console
     if not port:
         sys.exit("no board serial port found; is the micro-USB debug cable plugged in?")
-    console = Console(port, args.mic, args.web_port)
+    console = Console(port, args.mic, args.web_port, args.classic)
     saved = termios.tcgetattr(0)
     try:
         tty.setraw(0)

@@ -93,10 +93,13 @@ def receive_upload():
     except Exception:
         pass
     print("  receiving audio from the laptop microphone...", flush=True)
-    chunks, expected = [], ""
+    chunks, expected, fmt, rate = [], "", "pcm16", 12000
     try:
         for line in sys.stdin:
             line = line.strip()
+            if line.startswith("FMT "):          # e.g. "FMT ulaw 12000" from tools/sister_console.py
+                fmt, rate = line.split()[1], int(line.split()[2])
+                continue
             if line.startswith("END"):
                 expected = line[3:].strip()
                 break
@@ -111,7 +114,9 @@ def receive_upload():
     if not pcm or hashlib.sha256(pcm).hexdigest() != expected:
         print("  the recording was damaged on the way here. Please say it again, or type your answer.")
         return None
-    pcm, _ = audioop.ratecv(pcm, 2, 1, 12000, 16000, None)
+    if fmt == "ulaw":
+        pcm = audioop.ulaw2lin(pcm, 2)
+    pcm, _ = audioop.ratecv(pcm, 2, 1, rate, 16000, None)
     WORK_DIR.mkdir(parents=True, exist_ok=True)
     path = WORK_DIR / "from_laptop.wav"
     with wave.open(str(path), "wb") as out:
@@ -167,6 +172,16 @@ def ingest_scan(session_id, arg):
                 "flags": result["flags"], "urgency_flag": "", "source": "model observation, unconfirmed",
                 "model": result.get("model"), "latency_ms": result.get("latency_ms")}
     return SessionManager.attach_imaging_analysis(session_id, analysis)
+
+
+PLAIN_ANSWERS = {
+    "yes": "yes", "yeah": "yes", "yep": "yes", "yes i do": "yes", "yes i am": "yes", "yes i have": "yes", "i do": "yes",
+    "no": "no", "nope": "no", "no i don't": "no", "no i do not": "no", "no i'm not": "no", "no i am not": "no",
+    "no i haven't": "no", "i don't": "no",
+    "i don't know": "unknown", "i dont know": "unknown", "don't know": "unknown", "not sure": "unknown", "i'm not sure": "unknown",
+    "prefer not to answer": "declined", "i prefer not to answer": "declined",
+    "celsius": "Celsius", "fahrenheit": "Fahrenheit",
+}
 
 
 def main():
@@ -229,7 +244,15 @@ def main():
             continue
         if kind == "voice":
             confirmed = input("Is the transcript correct? [y/N] ").strip().lower()
-            if confirmed != "y": continue
+            if confirmed not in ("y", "yes"): continue
+        if kind in ("text", "voice"):
+            # A plain yes / no / don't know is matched to the question's own choices in code;
+            # no model call is needed, and none is trusted, for that.
+            plain = re.sub(r"[^a-z' ]", "", answer.lower()).strip()
+            value = PLAIN_ANSWERS.get(plain)
+            match = next((c for c in choices if c["value"] == value), None) if value else None
+            if match:
+                kind, answer, choice_value = "choice", match["label"], match["value"]
         try:
             import uuid
             response = SessionManager.process_turn(sid, answer, kind,

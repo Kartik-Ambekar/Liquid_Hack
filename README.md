@@ -1,135 +1,84 @@
-# Sister: SAMPLE interview prototype
+<h1 align="center">Sister</h1>
+<p align="center"><b>An offline nurse's assistant that listens, speaks and triages on a Dragonwing IQ-9075, using only Liquid AI models.</b></p>
+<p align="center">
+  <img alt="Runs offline" src="https://img.shields.io/badge/network-none%20needed-2bb8a6">
+  <img alt="Models" src="https://img.shields.io/badge/models-Liquid%20AI%20LFM3%20only-2bb8a6">
+  <img alt="Hardware" src="https://img.shields.io/badge/hardware-Dragonwing%20IQ--9075%20NPU-2bb8a6">
+  <img alt="Status" src="https://img.shields.io/badge/status-hackathon%20prototype%2C%20not%20clinically%20validated-e05a6b">
+</p>
 
-The default web and terminal apps now use the [SAMPLE questionnaire](docs/sister-questionnaire-v1/QUESTIONNAIRE.md). This is an **unvalidated synthetic demonstration**, not a patient-ready triage service.
+"Sister" is what a nurse is called in South Africa. In a remote rural clinic there may be no internet, and
+reaching a district hospital costs real time and money. Sister interviews a patient by voice, checks every
+answer against red-flag rules, tells the patient in plain spoken words how urgently they need care, and
+prints a handover note for the clinician. All of it runs on one board with the Wi-Fi switched off.
 
-## Current interview
+> **Hackathon prototype.** The rules and questionnaire are synthetic and have not been reviewed by a
+> clinician. Sister is not a medical device and must not be used for real patient care.
 
-- 41 possible questions, with conditional pain/temperature/history branches and explicit unknown/declined answers.
-- Real Liquid text extraction through the existing ZETIC wrapper, using the packaged system prompt, schema, and examples. Maximum two total attempts; missing or malformed model output produces a visible error, never invented patient facts.
-- Fixed questions and safety messages. Reported safety concerns interrupt the interview; no branch recommends self-care or a safe waiting interval.
-- Editable, revision-confirmed summary and text download. Unanswered and inactive fields remain visible. Image observations never control questionnaire routing.
-- Browser microphone/WAV input with transcript editing and explicit confirmation, plus typed and choice input. Terminal retains the team's board ASR/TTS integrations.
-- Persistent help/stop controls, stale-response rejection, retry deduplication, and session deletion. Help can interrupt an outstanding model call.
-- Dedicated `sample_audit.jsonl` after consent; old tracked logs are untouched. Sessions themselves are in memory. A browser on another device receives data over the local connection.
+![The Sister dashboard during a real session on the board](docs/img/dashboard.png)
 
-## Run
+*The dashboard during a real session: the patient said "I've got slurred speech", rule `RULE-EM-02` fired,
+and Sister spoke the result. Every line on this page was parsed from what the board printed over the serial cable.*
 
-```sh
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-.venv/bin/python start.py
-```
+## Why this is not a cloud API call
 
-Open `http://127.0.0.1:8080`. On a separate laptop, use your existing local SSH port-forwarding setup. Model location and package overrides remain `SISTER_ZETIC_DIR`, `SISTER_TEXT_PKG`, `SISTER_AUDIO_PKG`, and `SISTER_SPEECH_PKG`. No cloud model fallback is configured. Choices work without a model; free-text extraction and transcription require the actual staged runtime.
+| Constraint | What it means for Sister |
+|---|---|
+| **No network** | The clinics this is for have no reliable internet. Sister's core workflow makes no network request, and no cloud fallback is configured anywhere in the code. |
+| **Sensitive data** | A patient's voice, symptoms and scans never leave the board. The audit log and handover note are written to its local disk. |
+| **Responsiveness** | First token arrives in about 0.1 s and speech starts in about 0.1 s, with no round trip to a data centre. |
+| **Flat cost** | One board, no per-request fee, however many patients are seen. |
 
-Terminal: `python3 sister_cli.py` (optionally `--speak`). Use numbered choices, `help`, `stop`, and `correct <field_id>`. Confirm each voice transcript before it is accepted. Summary correction is available before finishing. Web users may also edit completed summaries.
+## How it works
 
-## Verify
+![Architecture: laptop as microphone and screen, three Liquid models and a rule engine on the board](docs/img/architecture.svg)
 
-```sh
-.venv/bin/pip install -r requirements-dev.txt
-.venv/bin/python -m pytest tests/test_sample_app.py -q
-.venv/bin/python -m unittest discover -s docs/sister-questionnaire-v1 -p test_controller.py -q
-# Optional real-browser integration check:
-.venv/bin/pip install playwright
-.venv/bin/python -m playwright install chromium
-.venv/bin/python -m pytest tests/test_sample_browser.py -q
-```
+1. **Hear.** The patient holds SPACE and speaks. The recording goes down the serial cable (checked with
+   SHA-256 on arrival) and **LFM3-Omni-2B** transcribes it on the board. Sister shows what it heard so the
+   patient can confirm or answer again.
+2. **Decide.** A rule engine in plain Python ([backend/triage_rules.py](backend/triage_rules.py)) runs after
+   every answer. An emergency answer stops the interview at once. If the input is unclear, the rules pick the
+   higher urgency. No model takes part in this step.
+3. **Explain.** **LFM3-1.7B** is given the decision the rule already made and rewords it in two or three
+   simple sentences. Its prompt forbids changing the decision or naming a disease.
+4. **Speak.** **LFM3-Audio-2B** turns Sister's words into speech on the board and plays it through the board's speaker.
+5. **Record.** Sister writes a one-page handover note for the clinic and appends every turn, rule and
+   latency to a JSONL audit log that is flushed to disk with `fsync`.
 
-HTTP, terminal, and browser tests use **explicit model test doubles**. They verify integration and routing; they do not measure Liquid extraction accuracy or validate clinical content. The existing `test_direct_units.py`, `test_in_process.py`, and `test_end_to_end.py` are historical tests of the previous short interview/heuristic imaging paths and are not the test contract for the new default UI.
+### Only Liquid AI models
 
-Tested locally: complete default and branched interviews, unknown safety responses, corrections, consent, malformed output and repair limits, unconfirmed voice rejection, help interruption during inference, image isolation, deleted sessions/logs, real browser summary editing/download and mobile-width layout. Actual extraction quality, microphone acoustics, model latency and disconnected Dragonwing operation require a separate board rehearsal; the older board benchmarks below do not measure this new extraction prompt.
+Every model call in Sister goes to a Liquid AI LFM3 model staged on the board and run on the Hexagon NPU
+through the ZETIC Ixian runtime ([backend/liquid_engine.py](backend/liquid_engine.py)). There is no other
+model, no hosted API and no fallback.
 
-Implementation: [backend/sample_interview.py](backend/sample_interview.py), [HTTP app](backend/main.py), [web UI](static/sample.html), and [SAMPLE pack](docs/sister-questionnaire-v1/IMPLEMENTATION.md). The runtime loads the questionnaire, controller, schema and prompts from that versioned pack; include `docs/sister-questionnaire-v1/` when deploying.
+| Job | Model | Limits set in code |
+|---|---|---|
+| Speech to text | `LiquidAI/LFM3-Omni-2B` | One WAV, up to 30 s, 128 tokens |
+| Scan description | `LiquidAI/LFM3-Omni-2B` | One 512x512 image, 120 tokens, observations only |
+| Plain-language explanation and answer extraction | `LiquidAI/LFM3-1.7B` | 160 tokens, at most two attempts |
+| Text to speech | `LiquidAI/LFM3-Audio-2B` | Female voice, American English |
 
----
+Nothing is simulated. If a model is missing or its answer fails validation, the call returns an error and
+Sister asks the patient to type instead, or falls back to the fixed rule text. It never invents an answer.
 
-# Historical implementation and board notes
+### The model explains, code decides
 
-The material below describes the earlier three-step interview and imaging demo. It is retained for provenance, including the team's board measurements. Its triage outcomes, imaging claims, and example flows do not describe the new default SAMPLE interview and do not constitute clinical validation.
+A language model can drift or make things up, which is not acceptable when the output is "go to hospital
+now" or "you can wait". So Sister splits the work:
 
-# Sister: Offline Health Triage & Medical Imaging Assistant
+- **Models handle language:** speech into text, a scan into a description, a decision into kind words.
+- **Code handles judgement:** urgency comes from named rules (`RULE-EM-01` to `05` for emergencies,
+  `RULE-CL-01` to `04` for a clinic visit, `RULE-SAFETY-S3` as the cautious default). The same answers always
+  give the same result, and each decision names the rule that fired.
+- **Scans never set urgency.** The model's description is recorded for the clinician only.
 
-> **"Sister"** is what a nurse is called in South Africa. Stationed in remote rural communities where there is no internet and reaching a district hospital costs real time and money, Sister is an offline health triage assistant that runs edge-native on the **Dragonwing IQ-9075**.
+## Measured on the board
 
-It interviews patients about their symptoms using spoken voice, ingests and deeply analyzes medical scans (**X-Rays** and **MRIs**), and determines how urgently they need care using a **deterministic, code-driven clinical red-flag engine** ("the model explains; code decides").
+![Measured performance: first token about 0.1 s, about 40 tokens per second](docs/img/performance.svg)
 
----
-
-## 🌟 Key Highlights
-
-- **100% Offline & Edge-Native**: Operates with Wi-Fi turned off. Patient health data never leaves the physical hardware. Zero cloud dependencies, zero external CDNs, flat operating cost.
-- **Medical Imaging Analyzer (MRI & X-Ray)**:
-  - **Chest Radiographs (CXR)**: Detects focal opacities/consolidation (pneumonia/infiltrates), estimates Cardiothoracic Ratio (CTR), checks bilateral lung aeration.
-  - **Musculoskeletal / Bone X-Rays**: Detects cortical bone margin disruptions, fracture lines, and joint step-offs.
-  - **Brain MRI (Axial T1/T2/FLAIR)**: Measures cerebral hemisphere symmetry, detects acute focal signal abnormalities (ischemia, lesions), and evaluates midline shift (mm).
-  - **Spine & Joint MRI**: Identifies disc contour variations and articular inflammation zones.
-  - **ROI Bounding Boxes (F11)**: Automatically renders color-coded bounding boxes over areas of interest directly on the UI canvas.
-  - **Safety S2 Compliant**: Findings are presented as observations for clinician confirmation, never as a definitive diagnosis.
-- **Liquid AI Model Suite**:
-  - **Voice / Speech ASR**: `LiquidAI/LFM3-Omni-2B` transcribes spoken answers (WAV up to 30s, English) on-device.
-  - **Scan description**: `LiquidAI/LFM3-Omni-2B` describes one 512×512 RGB image as observations for a clinician.
-  - **Plain-language explanation**: `LiquidAI/LFM3-1.7B` rewords the rule's decision for the patient. It does not decide.
-- **Code-Driven Triage Safety (F4 / Repo Rule 4)**:
-  - Red-flag symptoms escalate to top urgency level strictly through rules in code, not model hallucination or drift.
-  - **Emergency**: Immediate hospital evaluation today (cardiac distress, FAST stroke signs, airway compromise, critical imaging findings).
-  - **Clinic**: Health centre visit within 24–48 hours (suspected fractures, persistent fever, localized pneumonia opacities).
-  - **Self-Care**: Mild viral symptoms or minor contusions monitored at home.
-  - **Failsafe (Safety S3)**: If symptoms or scans are ambiguous, code defaults to higher urgency.
-- **Voice-First Self-Serve Kiosk (F1, F12, F15, F16)**:
-  - Audio recording with browser-encoded 16kHz 16-bit PCM WAV.
-  - Immediate transcript display back to the patient so they can see and confirm what Sister heard.
-  - Text typing fallback and quick-select option chips for patients with no medical vocabulary or typing skills.
-  - Local speech synthesis read-aloud so patients who cannot read comfortably can listen to Sister.
-- **Clinician Handover Note (F8)**: Generates a one-page structured summary note (complaint, timeline, red flags, imaging findings, urgency) for the patient to carry to a visiting doctor or clinic.
-- **Flushed JSONL Audit Log (F6)**: Flushes every turn, timestamp, patient input, model rationale, rule fired, and latency telemetry to `sister_audit.jsonl` immediately via `os.fsync()`.
-
----
-
-## 🏗️ System Architecture
-
-```
-                                  [ Patient / Touch Kiosk / Browser ]
-                                                  │
-                 ┌────────────────────────────────┴────────────────────────────────┐
-                 │                                                                 │
-          [ Voice Input ]                                                  [ Medical Scans ]
-       16kHz 16-bit Mono WAV                                            X-Rays & MRIs (Upload/Camera)
-                 │                                                                 │
-                 ▼                                                                 ▼
-      [ LiquidAI/LFM3-Audio-2B ]                                       [ Preprocessor 512x512 RGB ]
-        Speech Transcription                                                       │
-                 │                                                                 ▼
-                 │                                                    [ LiquidAI/LFM3-Omni-2B ]
-                 │                                                 Deep Radiological Feature & ROI
-                 │                                                                 │
-                 └────────────────────────┬────────────────────────────────────────┘
-                                          │
-                                          ▼
-                         [ Session Manager & Dialogue Flow ]
-                                          │
-                                          ▼
-                     [ Deterministic Red-Flag Triage Engine ]
-                         (Code Decides, Model Explains)
-                       ├── RULE-EM-01..05 (Emergency Hospital)
-                       ├── RULE-CL-01..05 (Clinic in 24-48h)
-                       ├── RULE-SC-01..02 (Self-Care at Home)
-                       └── RULE-SAFETY-S3 (Failsafe Default)
-                                          │
-                         ┌────────────────┴────────────────┐
-                         │                                 │
-                         ▼                                 ▼
-             [ Structured Handover Note ]       [ Flushed sister_audit.jsonl ]
-               For Receiving Clinician            Turn telemetry, rules, latency
-```
-
----
-
-## ⚡ Measured on the board
-
-Dragonwing IQ-9075, Ubuntu 24.04, ZETIC Ixian Hexagon SDK 0.2.1 (runtime `3650a76`), v73 two-NSP packages v0.2.0,
-2026-11-13. These are **single smoke-test requests**, not benchmarks: one sample each, no medians.
-Every request starts a fresh CLI process, so each one pays the model load.
+Dragonwing IQ-9075, Ubuntu 24.04, ZETIC Ixian Hexagon SDK 0.2.1, v73 two-NSP packages, 2026-11-13. These
+are **single requests, not benchmarks**: one sample each, no medians. Every request starts a fresh process,
+so each one pays the model load.
 
 | Request | Model | Model load | First token | Decode | Whole request |
 |---|---|---|---|---|---|
@@ -142,167 +91,91 @@ Every request starts a fresh CLI process, so each one pays the model load.
 Each request's log showed the Hexagon runtime opening on v73 with two NSPs. Not measured: peak memory,
 endurance, time with the model kept loaded, and accuracy of any kind.
 
-### What is and is not real in this repo
+## Run the demo
 
-- **Real, on the board:** speech to text, scan description, and the plain-language explanation
-  (`backend/liquid_engine.py`, through the terminal demo `sister_cli.py`). No answer is simulated; a failed
-  model call returns an error and Sister asks the patient to type instead.
-- **Rules:** `backend/triage_rules.py` holds synthetic demo rules. They were not reviewed by a clinician and
-  are not taken from a WHO or other published protocol. They run after every answer, so an emergency answer
-  stops the interview at once.
-- **Scans do not set urgency.** The model's description is recorded for the clinician only. A patient who
-  brings a scan is never given a self-care result.
-- **Sample scans are synthetic drawings,** not real X-rays or MRIs. How the model does on real scans is untested.
-- **Not run on the board yet:** the web UI (`backend/main.py`, `static/`), which needs FastAPI, Pillow and
-  NumPy installed, and a wired link from laptop to board. `backend/imaging_analyzer.py` is pixel heuristics
-  and filename matching, not a model, and its bounding boxes do not come from a model.
-- **Not working on the board:** its own speaker (`aplay`: "Host is down") and microphone (silent). Voice was
-  tested with WAV files.
-- The files in `tests/` were written against the earlier simulated engine and have not been updated.
-
----
-
-## 🚀 Quick Start
-
-### 1. Requirements
-- Python 3.10+ (macOS / Linux / Dragonwing IQ-9075)
-- Standard browser (Chrome / Edge / Safari / Firefox)
-
-### 1a. Terminal demo on the board (works with Wi-Fi off)
-
-There are two terminal entry points:
-
-- `sister_voice_demo.py` is the four-step interview that was run end to end on the board with real models,
-  voice in and out, and the dashboard. It is what `tools/sister_console.py --start` launches.
-- `sister_cli.py` is the newer SAMPLE history interview (`backend/sample_interview.py`, see the section on it
-  in this README). It has its own tests; it has not been run on the board with the voice console yet.
-
-The commands below use the voice demo.
-
-Needs only Python 3.12 and the models staged in `~/zetic-demo` (SDK, `run.py`, `models/`). From the board's
-serial console or any shell on the board:
+On the laptop that holds the board's micro-USB serial cable (needs Python 3 and ffmpeg):
 
 ```bash
-python3 sister_voice_demo.py
+python3 tools/sister_console.py --start
 ```
 
-Add `--speak` to have Sister say each question aloud through the board speaker (speech generated on the board
-by LFM3-Audio-2B). The board has no microphone, so to answer by voice run `tools/talk.sh` on the laptop that
-holds the serial console in `screen`: it records from the laptop microphone and sends the recording down the
-serial line, where the board transcribes it.
+This opens the serial console, starts Sister on the board in speaking mode, and serves the dashboard at
+`http://127.0.0.1:8765` (loopback only, no external assets). Hold SPACE to talk and release to send.
 
-**Push-to-talk console (recommended):** on the laptop that has the board's serial cable, run
-`python3 tools/sister_console.py --start`. It opens the serial console, keeps the laptop microphone open
-(needs ffmpeg), and starts Sister in speaking mode. Hold SPACE while you talk and let go to send: the recording
-goes down the serial line and is transcribed on the board. Ctrl-] quits. A terminal cannot see a key release,
-so release is detected when the key's auto-repeat stops.
+On the board itself, with the models staged in `~/zetic-demo`:
 
-**Dashboard:** the same program serves a status page at `http://127.0.0.1:8765` (loopback only, no external
-assets). It shows whether the board and Sister are up, whose turn it is (Sister speaking, you recording,
-the board transcribing), the conversation, the rule decision and the live board log. Hold SPACE in the page
-to talk; the browser sees the real key release. Everything on it is parsed from what the board prints over
-the serial cable. Inference and every decision stay on the board.
-
-Type an answer, type a choice number, `v samples/patient_cough.wav` to answer by voice from a WAV file, or
-`s 5` at the scan question to attach a sample scan. The decision, the rule that fired, the model's
-explanation, the handover note and the audit log lines are printed at the end.
-
-### 2. Setup & Launch (web UI, not yet run on the board)
 ```bash
-# Clone the repository
-git clone https://github.com/your-org/sister-triage.git
-cd sister-triage
-
-# Run launcher (sets up environment, fixtures, and starts server)
-./run.sh
+python3 sister_voice_demo.py --speak
 ```
-Or directly:
+
+Type an answer or a choice number, `v samples/sample_patient_answer.wav` to answer from a WAV file, or
+`s 5` at the scan question to attach a sample scan.
+
+### Two-minute judge script
+
+1. Turn the board's Wi-Fi off: `sudo nmcli radio wifi off`, then `nmcli -p device`.
+2. Start the console and open the dashboard.
+3. Answer Sister's questions by voice. Say a red-flag symptom such as slurred speech.
+4. Show the red decision banner with the rule ID, and hear Sister explain it aloud.
+5. Show the model timing lines and the audit log lines in the board log panel.
+
+## SAMPLE history interview
+
+A second, longer interview follows the SAMPLE history format: 41 possible questions with conditional
+branches and explicit "unknown" and "declined" answers
+([questionnaire](docs/sister-questionnaire-v1/QUESTIONNAIRE.md)). LFM3-1.7B extracts structured answers
+from free text against a JSON schema, with at most two attempts; malformed output produces a visible error,
+never invented patient facts. Reported safety concerns interrupt the interview, and no branch recommends
+self-care. The summary can be edited and downloaded.
+
 ```bash
-.venv/bin/python start.py
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python start.py        # web UI at http://127.0.0.1:8080
+python3 sister_cli.py            # terminal version, add --speak for voice
 ```
-Open **`http://127.0.0.1:8080`** in your browser.
 
-> **Note on Camera & Mic**: Modern browsers require a local origin (`http://127.0.0.1:<port>` or `https://`) to grant webcam and microphone permissions. If accessing an IQ-9075 board from your laptop, connect via the recommended SSH port forward:
-> ```bash
-> ssh -L 8080:127.0.0.1:8080 user@<iq9075-board-ip>
-> ```
+## What is and is not real
 
----
+- **Real, on the board:** speech to text, the plain-language explanation, text to speech, and the rule
+  decision, run end to end by voice through `sister_voice_demo.py` and the dashboard.
+- **Rules and questionnaire are synthetic.** They were not reviewed by a clinician and are not taken from
+  a published protocol.
+- **Sample scans are synthetic drawings,** not real X-rays or MRIs. How the model does on real scans is
+  untested.
+- **`backend/imaging_analyzer.py` is not a model.** It is pixel heuristics from an earlier version, and its
+  bounding boxes do not come from a model.
+- **The SAMPLE interview has not been run on the board with the voice console.** Its tests use model test
+  doubles, so they check routing and integration, not extraction accuracy.
+- **The board has no working microphone,** so the laptop records the patient's voice and sends it over the serial cable. Sister's speech is generated on the board and played through the board's speaker.
+- `tests/test_direct_units.py`, `test_in_process.py` and `test_end_to_end.py` were written for an earlier
+  simulated engine and have not been updated.
 
-## 📋 Running Automated Tests
+## Tests
 
-Run the full in-process and direct pipeline verification test suite:
 ```bash
-PYTHONPATH=. .venv/bin/python tests/test_direct_units.py
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m pytest tests/test_sample_app.py -q
+.venv/bin/python -m unittest discover -s docs/sister-questionnaire-v1 -p test_controller.py -q
 ```
-Outputs:
-- LiquidAI/LFM3-Audio-2B speech engine verification
-- Medical imaging pipeline (CXR Normal, CXR Pneumonia, Bone Fracture, Brain MRI Lesion)
-- Conversational state machine & handover note creation
-- Deterministic clinical red-flag rules (Cardiac, Stroke, Trauma, Failsafe)
-- Disk-flushed JSONL audit log inspection
 
----
-
-## ⏱️ 2-Minute Judge Demo Script
-
-Follow this exact sequence in front of the judges:
-
-1. **Step 1: Turn Wi-Fi Off**
-   - Disconnect Wi-Fi on the laptop or board in front of the judge. Point to the UI badge: `Wi-Fi: OFFLINE SAFE` and `Edge Native: Dragonwing IQ-9075`.
-2. **Step 2: Start Consultation & Ingest Scan**
-   - Click **"📷 Yes, I have an X-Ray or MRI scan"**.
-   - Select **"Preset Samples"** tab on the right and click **"Pneumonia Chest X-Ray"** (or drag in your own scan file, or click **"Capture from Laptop Camera"**).
-   - Show how Sister preprocesses to 512×512 RGB, highlights the consolidation with a color-coded bounding box, and describes the observation in plain language.
-3. **Step 3: Spoken Voice Response**
-   - Click and hold the microphone button: *"I have had a high fever and productive cough with green phlegm for 4 days."*
-   - Show the transcript appearing instantly in the feedback box: *"What Sister Heard (LiquidAI/LFM3-Audio-2B)"*.
-   - Confirm and send.
-4. **Step 4: Deterministic Clinical Triage Outcome**
-   - Show the resulting badge: **`CLINIC: Visit Health Centre Within 24-48 Hours`** (triggered by `RULE-CL-01` due to focal opacity on CXR with prolonged fever).
-   - Switch to the **"Clinical Handover Note"** tab: show the structured one-page handover note with chief complaint, timeline, red flags, imaging metrics, and recommended action. Click **"Print / Save"**.
-5. **Step 5: Live Flushed JSONL Audit Log**
-   - Click **"📋 Audit Log"** in the top navigation bar. Show the flushed records with ISO-8601 timestamps, model latencies, rule IDs, and verify `sister_audit.jsonl` on disk.
-
----
-
-## 🛡️ Clinical Safety Principles
-
-- **S1 (Triage, Not Diagnosis)**: Sister explains *how urgently* to seek care. It never issues definitive medical diagnoses.
-- **S2 (Radiology Observations)**: 2B vision model output is presented as observations for clinician review, not as an official radiology report.
-- **S3 (Conservative Precaution)**: Whenever patient input is ambiguous or borderline, code rules escalate to the higher urgency tier.
-- **S4 (Zero Data Leakage)**: Session data remains strictly on the board's local filesystem and is never transmitted off-box.
-
----
-
-## 📜 Repository Structure
+## Repository
 
 ```
-.
-├── backend/
-│   ├── main.py                 # FastAPI application & REST endpoints
-│   ├── liquid_engine.py        # Liquid AI runtime connector (Audio-2B, Omni-2B, 1.7B)
-│   ├── imaging_analyzer.py     # Multimodal MRI & X-Ray computer vision & ROI pipeline
-│   ├── triage_rules.py         # Code-driven deterministic red-flag clinical engine (Rule 4)
-│   ├── session_manager.py      # Conversation state machine & JSONL flusher
-│   └── handover_generator.py   # Structured clinical handover note builder (F8)
-├── static/
-│   ├── index.html              # Offline self-contained kiosk web UI
-│   ├── style.css               # Accessible healthcare UI styles (zero external CDNs)
-│   └── app.js                  # Audio WAV recorder, camera viewfinder, canvas bounding boxes
-├── samples/
-│   ├── chest_xray_normal.png   # Sample clear chest radiograph
-│   ├── chest_xray_pneumonia.png# Sample radiograph with focal consolidation
-│   ├── bone_fracture_xray.png  # Sample radiograph with cortical bone fracture
-│   ├── brain_mri_normal.png    # Sample normal axial brain MRI
-│   ├── brain_mri_acute_lesion.png # Sample brain MRI with acute focal lesion
-│   ├── sample_patient_answer.wav  # Standard 16kHz mono audio fixture
-│   ├── generate_samples.py     # Sample image generator
-│   └── generate_wav.py         # Sample WAV generator
-├── tests/
-│   └── test_direct_units.py    # Unit & pipeline test suite
-├── sister_audit.jsonl          # Flushed on-device audit log
-├── start.py                    # Server startup script
-├── run.sh                      # One-command execution script
-└── README.md                   # Documentation & judge presentation guide
+backend/
+  liquid_engine.py       The only path to a model: LFM3 through the ZETIC Ixian runtime
+  triage_rules.py        Red-flag rules that decide urgency
+  sample_interview.py    SAMPLE history interview and extraction
+  session_manager.py     Interview state and the fsync'd audit log
+  handover_generator.py  One-page note for the clinician
+  main.py                FastAPI app for the web UI
+sister_voice_demo.py     Voice interview run on the board
+sister_cli.py            SAMPLE interview in the terminal
+tools/
+  sister_console.py      Laptop side: serial console, push-to-talk, dashboard server
+  dashboard.py           The dashboard page (standard library only)
+docs/sister-questionnaire-v1/   Questionnaire, prompts, schema and controller
+samples/                 Synthetic scans and a sample WAV
 ```
+
+Built at the Cleared for Takeoff on-device hackathon, November 2026.
