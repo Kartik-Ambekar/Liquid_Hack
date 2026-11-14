@@ -127,6 +127,11 @@ serial console or any shell on the board:
 python3 sister_cli.py
 ```
 
+Add `--speak` to have Sister say each question aloud through the board speaker (speech generated on the board
+by LFM3-Audio-2B). The board has no microphone, so to answer by voice run `tools/talk.sh` on the laptop that
+holds the serial console in `screen`: it records from the laptop microphone and sends the recording down the
+serial line, where the board transcribes it.
+
 Type an answer, type a choice number, `v samples/patient_cough.wav` to answer by voice from a WAV file, or
 `s 5` at the scan question to attach a sample scan. The decision, the rule that fired, the model's
 explanation, the handover note and the audit log lines are printed at the end.

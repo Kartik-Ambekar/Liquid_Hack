@@ -153,6 +153,35 @@ class LiquidAIEngine:
         )
         return cls.call(cls.TEXT_PACKAGE, prompt, max_tokens=160)
 
+    SPEECH_PACKAGE = os.environ.get("SISTER_SPEECH_PKG", "lfm3-audio-2b")
+
+    @classmethod
+    def speak_to_wav(cls, text: str, out_path) -> Dict[str, Any]:
+        """Text to speech on the board with LFM3-Audio-2B. Writes a WAV file; plays nothing."""
+        import subprocess
+        started = time.perf_counter()
+        sdk = ZETIC_DIR / "sdk"
+        out = {"ok": False, "errors": [], "package": cls.SPEECH_PACKAGE, "path": str(out_path)}
+        command = [str(sdk / "bin/zetic_lfm3_cli"), "chat", "--model", str(ZETIC_DIR / "models" / cls.SPEECH_PACKAGE),
+                   "--target", "v73", "--lib-dir", str(sdk / "lib"), "--max-tokens", "700", "--tts",
+                   "--out", str(out_path), "--system", "Perform TTS in American English using a female voice.",
+                   "Say: " + text.strip()]
+        try:
+            env = dict(os.environ, LD_LIBRARY_PATH=str(sdk / "lib"))
+            done = subprocess.run(command, cwd=sdk, env=env, capture_output=True, text=True, timeout=120)
+            log = done.stdout + done.stderr
+            seconds = re.search(r"([\d.]+) s of audio", log)
+            first = re.search(r"first audio ([\d.]+) ms", log)
+            out.update(audio_seconds=float(seconds.group(1)) if seconds else None,
+                       first_audio_ms=float(first.group(1)) if first else None)
+            if done.returncode or not seconds or not Path(out_path).is_file():
+                out["errors"].append(f"speech generation failed (exit {done.returncode})")
+        except Exception as exc:
+            out["errors"].append(f"{type(exc).__name__}: {exc}")
+        out["ok"] = not out["errors"]
+        out["latency_ms"] = round((time.perf_counter() - started) * 1000, 1)
+        return out
+
     @classmethod
     def runtime_status(cls) -> Dict[str, Any]:
         """What is actually staged on this machine. No inference."""
