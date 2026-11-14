@@ -17,9 +17,9 @@ It interviews patients about their symptoms using spoken voice, ingests and deep
   - **ROI Bounding Boxes (F11)**: Automatically renders color-coded bounding boxes over areas of interest directly on the UI canvas.
   - **Safety S2 Compliant**: Findings are presented as observations for clinician confirmation, never as a definitive diagnosis.
 - **Liquid AI Model Suite**:
-  - **Voice / Speech ASR**: `LiquidAI/LFM3-Audio-2B` transcribes spoken answers (16kHz WAV up to 30s) on-device.
-  - **Multimodal Medical Vision**: `LiquidAI/LFM3-Omni-2B` inspects 512×512 RGB preprocessed scans.
-  - **Clinical Reasoning**: `LiquidAI/LFM3-1.7B` on GenieX (or embedded edge fallback) handles dialogue.
+  - **Voice / Speech ASR**: `LiquidAI/LFM3-Omni-2B` transcribes spoken answers (WAV up to 30s, English) on-device.
+  - **Scan description**: `LiquidAI/LFM3-Omni-2B` describes one 512×512 RGB image as observations for a clinician.
+  - **Plain-language explanation**: `LiquidAI/LFM3-1.7B` rewords the rule's decision for the patient. It does not decide.
 - **Code-Driven Triage Safety (F4 / Repo Rule 4)**:
   - Red-flag symptoms escalate to top urgency level strictly through rules in code, not model hallucination or drift.
   - **Emergency**: Immediate hospital evaluation today (cardiac distress, FAST stroke signs, airway compromise, critical imaging findings).
@@ -75,18 +75,40 @@ It interviews patients about their symptoms using spoken voice, ingests and deep
 
 ---
 
-## ⚡ Measured Edge Benchmarks
+## ⚡ Measured on the board
 
-Measured on local hardware / Dragonwing IQ-9075:
+Dragonwing IQ-9075, Ubuntu 24.04, ZETIC Ixian Hexagon SDK 0.2.1 (runtime `3650a76`), v73 two-NSP packages v0.2.0,
+2026-11-13. These are **single smoke-test requests**, not benchmarks: one sample each, no medians.
+Every request starts a fresh CLI process, so each one pays the model load.
 
-| Metric | Measured Value | Standard Target | Status |
-|---|---|---|---|
-| **Audio Transcription Latency (ASR)** | **~125 ms** (2.5s WAV) | < 3000 ms | 🟢 Real-time |
-| **Multimodal Scan Preprocess + Analysis** | **~85 ms** (512x512 RGB) | < 2000 ms | 🟢 Real-time |
-| **Time to First Token (TTFT)** | **~56 ms** | < 500 ms | 🟢 Instantaneous |
-| **Inference Generation Speed** | **~42.5 tokens / sec** | > 20 tok/sec | 🟢 High throughput |
-| **End-to-End Turn Response Time** | **~180 ms** | < 4000 ms | 🟢 2-min demo ready |
-| **Audit Flush Duration (`fsync`)** | **< 1 ms** | Immediate | 🟢 Crash-proof |
+| Request | Model | Model load | First token | Decode | Whole request |
+|---|---|---|---|---|---|
+| Text, one sentence | LFM3-1.7B | 3.7 s | 66 ms | 37 tok/s | 4.1 s |
+| Explain a triage decision (about 80 tokens) | LFM3-1.7B | 3.6 s | 121 ms | 40 tok/s | 6.3 s |
+| One 512x512 image, described | LFM3-Omni-2B | 4.2 s | 230 ms | 38 tok/s | 5.0 s |
+| 11 s WAV, transcribed | LFM3-Omni-2B | 4.2 s | 143 ms | 40 tok/s | 5.1 s |
+| Spoken question to spoken reply (8.8 s of speech) | LFM3-Audio-2B | 3.9 s | 119 ms, first audio 277 ms | 33 tok/s | under 6 s |
+
+Each request's log showed the Hexagon runtime opening on v73 with two NSPs. Not measured: peak memory,
+endurance, time with the model kept loaded, and accuracy of any kind.
+
+### What is and is not real in this repo
+
+- **Real, on the board:** speech to text, scan description, and the plain-language explanation
+  (`backend/liquid_engine.py`, through the terminal demo `sister_cli.py`). No answer is simulated; a failed
+  model call returns an error and Sister asks the patient to type instead.
+- **Rules:** `backend/triage_rules.py` holds synthetic demo rules. They were not reviewed by a clinician and
+  are not taken from a WHO or other published protocol. They run after every answer, so an emergency answer
+  stops the interview at once.
+- **Scans do not set urgency.** The model's description is recorded for the clinician only. A patient who
+  brings a scan is never given a self-care result.
+- **Sample scans are synthetic drawings,** not real X-rays or MRIs. How the model does on real scans is untested.
+- **Not run on the board yet:** the web UI (`backend/main.py`, `static/`), which needs FastAPI, Pillow and
+  NumPy installed, and a wired link from laptop to board. `backend/imaging_analyzer.py` is pixel heuristics
+  and filename matching, not a model, and its bounding boxes do not come from a model.
+- **Not working on the board:** its own speaker (`aplay`: "Host is down") and microphone (silent). Voice was
+  tested with WAV files.
+- The files in `tests/` were written against the earlier simulated engine and have not been updated.
 
 ---
 
@@ -96,7 +118,25 @@ Measured on local hardware / Dragonwing IQ-9075:
 - Python 3.10+ (macOS / Linux / Dragonwing IQ-9075)
 - Standard browser (Chrome / Edge / Safari / Firefox)
 
-### 2. Setup & Launch
+### 1a. Terminal demo on the board (works with Wi-Fi off)
+
+Needs only Python 3.12 and the models staged in `~/zetic-demo` (SDK, `run.py`, `models/`). From the board's
+serial console or any shell on the board:
+
+```bash
+python3 sister_cli.py
+```
+
+Add `--speak` to have Sister say each question aloud through the board speaker (speech generated on the board
+by LFM3-Audio-2B). The board has no microphone, so to answer by voice run `tools/talk.sh` on the laptop that
+holds the serial console in `screen`: it records from the laptop microphone and sends the recording down the
+serial line, where the board transcribes it.
+
+Type an answer, type a choice number, `v samples/patient_cough.wav` to answer by voice from a WAV file, or
+`s 5` at the scan question to attach a sample scan. The decision, the rule that fired, the model's
+explanation, the handover note and the audit log lines are printed at the end.
+
+### 2. Setup & Launch (web UI, not yet run on the board)
 ```bash
 # Clone the repository
 git clone https://github.com/your-org/sister-triage.git

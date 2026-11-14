@@ -6,6 +6,10 @@ not through model judgement. The model explains; code decides."
 """
 
 from dataclasses import dataclass
+
+# These rules were written for a hackathon demo. They have not been reviewed by a
+# clinician and are not taken from a WHO or any other published protocol.
+RULESET_STATUS = "Synthetic demo rules for a hackathon prototype; not clinically reviewed"
 from typing import List, Dict, Any, Optional
 
 @dataclass

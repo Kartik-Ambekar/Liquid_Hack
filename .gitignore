@@ -33,3 +33,7 @@ wheels/
 
 # Audit log run artifacts (keep structure or include initial log)
 # sister_audit.jsonl
+
+tools/.rec
+tts_cache/
+handover-SIST-*.txt

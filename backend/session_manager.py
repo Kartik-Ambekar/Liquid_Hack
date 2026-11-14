@@ -17,7 +17,7 @@ import uuid
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
-from backend.triage_rules import ClinicalTriageEngine, TriageDecision
+from backend.triage_rules import ClinicalTriageEngine, TriageDecision, RULESET_STATUS
 from backend.handover_generator import HandoverNoteGenerator
 from backend.liquid_engine import LiquidAIEngine
 
@@ -55,7 +55,8 @@ class SessionManager:
             "session_id": session_id,
             "timestamp": session["start_time"],
             "hardware": "Dragonwing IQ-9075",
-            "models": ["LiquidAI/LFM3-Audio-2B", "LiquidAI/LFM3-Omni-2B", "LiquidAI/LFM3-1.7B"]
+            "ruleset_status": RULESET_STATUS,
+            "models": ["LiquidAI/LFM3-Omni-2B", "LiquidAI/LFM3-1.7B"]
         })
         
         return session
@@ -127,6 +128,9 @@ class SessionManager:
                 session["answers"]["chief_complaint"] = user_input
                 sister_response = cls._get_step_duration(user_input)
                 session["current_step"] = "DURATION"
+                early = cls._emergency_check(session)
+                if early:
+                    sister_response, rule_fired, triage_outcome = cls._complete(session, early, interrupted=True)
 
             # STEP 2: DURATION
             elif current_step == "DURATION":
@@ -134,40 +138,31 @@ class SessionManager:
                 session["answers"]["duration"] = user_input
                 sister_response = cls._get_step_severity(session["symptoms"])
                 session["current_step"] = "SEVERITY"
+                early = cls._emergency_check(session)
+                if early:
+                    sister_response, rule_fired, triage_outcome = cls._complete(session, early, interrupted=True)
 
             # STEP 3: SEVERITY & RED FLAGS
             elif current_step == "SEVERITY":
                 session["severity"] = cls._parse_severity(user_input)
                 session["answers"]["severity_description"] = user_input
                 
-                # Perform deterministic triage evaluation (F4)
-                decision = ClinicalTriageEngine.evaluate(session)
-                session["triage_decision"] = decision.__dict__
-                rule_fired = decision.rule_fired
-                triage_outcome = decision.urgency_level
-
-                # Generate Handover Note (F8)
-                handover = HandoverNoteGenerator.generate(session, decision)
-                session["handover_note"] = handover
-
-                sister_response = {
-                    "step": "COMPLETE",
-                    "sister_message": (
-                        f"Thank you for sharing your symptoms. "
-                        f"Based on clinical triage rules, your recommended urgency is: **{decision.urgency_label}**.\n\n"
-                        f"**Why:** {decision.summary_reason}\n\n"
-                        f"**Next Steps:** {decision.recommended_action}"
-                    ),
-                    "spoken_text": f"Your triage result is: {decision.urgency_label}. {decision.summary_reason} {decision.recommended_action}",
-                    "triage_decision": decision.__dict__,
-                    "handover_note": handover,
-                    "choices": [
-                        {"id": "download_note", "label": "📄 Save Handover Note", "action": "download_handover"},
-                        {"id": "restart", "label": "🔄 Start New Patient Consultation", "action": "new_session"}
-                    ],
-                    "status": "completed"
-                }
-                session["current_step"] = "COMPLETE"
+                # Deterministic triage evaluation (F4). The rules decide; no model is involved.
+                decision = ClinicalTriageEngine.evaluate(cls._decision_inputs(session))
+                # A scan's content is not used for urgency, but a patient who brings one
+                # is never told to stay home: the scan itself needs a clinician's eyes.
+                if session.get("imaging_findings") and decision.urgency_level == "SELF_CARE":
+                    decision = TriageDecision(
+                        urgency_level="CLINIC",
+                        urgency_label="Clinic: Visit Health Centre Within 24-48 Hours",
+                        color="#F59E0B",
+                        summary_reason="Your answers did not raise a danger sign, but you brought a scan that a clinician needs to look at.",
+                        recommended_action="Take your scan and this summary to your local clinic or health centre today or tomorrow.",
+                        rule_fired="RULE-SAFETY-SCAN",
+                        red_flags=[],
+                        confidence=decision.confidence,
+                    )
+                sister_response, rule_fired, triage_outcome = cls._complete(session, decision)
 
         except Exception as e:
             error_msg = str(e)
@@ -205,6 +200,55 @@ class SessionManager:
         })
 
         return sister_response
+
+    @classmethod
+    def _decision_inputs(cls, session: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Facts the rules are allowed to use. Scan observations are kept in the session
+        for the clinician, but are deliberately left out here: an unvalidated reading
+        of an image must not set urgency.
+        """
+        return {**session, "imaging_findings": None}
+
+    @classmethod
+    def _emergency_check(cls, session: Dict[str, Any]) -> Optional[TriageDecision]:
+        """
+        Runs the rules after every accepted answer, not only at the end, so an
+        emergency answer interrupts the interview instead of waiting for more questions.
+        """
+        decision = ClinicalTriageEngine.evaluate(cls._decision_inputs(session))
+        return decision if decision.urgency_level == "EMERGENCY" else None
+
+    @classmethod
+    def _complete(cls, session: Dict[str, Any], decision: TriageDecision, interrupted: bool = False):
+        """Ends the interview with a rule decision and writes the handover note (F3, F8)."""
+        session["triage_decision"] = decision.__dict__
+        handover = HandoverNoteGenerator.generate(session, decision)
+        session["handover_note"] = handover
+        lead = ("I am stopping the questions here because of what you just told me. " if interrupted
+                else "Thank you for sharing your symptoms. ")
+        scan_note = ("\n\nYour scan was recorded for the clinician. It was not used to decide urgency."
+                     if session.get("imaging_findings") else "")
+        response = {
+            "step": "COMPLETE",
+            "sister_message": (
+                f"{lead}"
+                f"Based on the triage rules, your recommended urgency is: **{decision.urgency_label}**.\n\n"
+                f"**Why:** {decision.summary_reason}\n\n"
+                f"**Next Steps:** {decision.recommended_action}{scan_note}"
+            ),
+            "spoken_text": f"Your triage result is: {decision.urgency_label}. {decision.summary_reason} {decision.recommended_action}",
+            "triage_decision": decision.__dict__,
+            "handover_note": handover,
+            "interrupted": interrupted,
+            "choices": [
+                {"id": "download_note", "label": "📄 Save Handover Note", "action": "download_handover"},
+                {"id": "restart", "label": "🔄 Start New Patient Consultation", "action": "new_session"}
+            ],
+            "status": "completed"
+        }
+        session["current_step"] = "COMPLETE"
+        return response, decision.rule_fired, decision.urgency_level
 
     @classmethod
     def attach_imaging_analysis(cls, session_id: str, analysis: Dict[str, Any]) -> Dict[str, Any]:
@@ -286,8 +330,8 @@ class SessionManager:
     def _get_step_duration(cls, symptom: str) -> Dict[str, Any]:
         return {
             "step": "DURATION",
-            "sister_message": f"I understand. How long have you had this {symptom}?",
-            "spoken_text": f"How long have you had this {symptom}?",
+            "sister_message": "I understand. How long has this been going on?",
+            "spoken_text": "How long has this been going on?",
             "choices": [
                 {"id": "d1", "label": "Just started today (few hours)", "action": "select_duration"},
                 {"id": "d2", "label": "For 2 to 3 days", "action": "select_duration"},
