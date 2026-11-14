@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sister · SAMPLE interview</title><link rel="stylesheet" href="/static/sample.css"></head>
+<body><main>
+<header><h1>Sister</h1><p>First-aid-style history for a healthcare professional</p><strong>Simulation only · Use synthetic cases · Not clinically validated</strong></header>
+<nav aria-label="Interview controls"><button id="help" class="help">Get help now</button><button id="stop">Stop</button><button id="summaryToggle">View summary</button><button id="restart">New interview</button><button id="delete">Delete this session</button></nav>
+<p id="intro"></p><p id="error" role="alert"></p><p id="status" aria-live="polite"></p>
+<section aria-labelledby="question"><h2 id="question" aria-live="polite">Starting…</h2><div id="choices"></div>
+<form id="answerForm"><label for="answer">Your answer</label><textarea id="answer" rows="3" maxlength="8000"></textarea><button id="send" type="submit">Send answer</button></form>
+<div id="voice"><label for="audio">Use a recorded WAV answer (up to 30 seconds)</label><input id="audio" type="file" accept="audio/wav,.wav"><button id="record">Record answer</button><button id="transcribe">Transcribe WAV</button><div id="transcriptPanel" hidden><label for="transcript">Check what Sister heard. Edit it if needed.</label><textarea id="transcript"></textarea><button id="confirmTranscript">Confirm and send</button></div></div>
+<button id="cancelCorrection" hidden>Cancel correction</button><button id="confirmSummary" hidden>Confirm current summary</button></section>
+<section id="summary" hidden><h2>Your recorded answers</h2><p>Unanswered and unknown are not negative answers. No safe waiting period or diagnosis is established.</p><div id="fields"></div><button id="download">Download handoff</button></section>
+<details><summary>Runtime status</summary><pre id="runtime"></pre></details>
+</main><script src="/static/sample.js"></script></body></html>

@@ -37,3 +37,6 @@ wheels/
 tools/.rec
 tts_cache/
 handover-SIST-*.txt
+
+sample_audit.jsonl
+.pytest_cache/

@@ -49,7 +49,7 @@ class LiquidAIEngine:
 
     @classmethod
     def call(cls, package: str, prompt: str, *, image: Optional[str] = None,
-             audio: Optional[str] = None, max_tokens: int = 128) -> Dict[str, Any]:
+             audio: Optional[str] = None, max_tokens: int = 128, attempts: int = 2) -> Dict[str, Any]:
         """One capped request, validated by the wrapper, with a single retry."""
         started = time.perf_counter()
         out: Dict[str, Any] = {"ok": False, "text": "", "package": package, "errors": [], "attempts": 0}
@@ -60,10 +60,13 @@ class LiquidAIEngine:
             out["latency_ms"] = round((time.perf_counter() - started) * 1000, 1)
             return out
         result: Dict[str, Any] = {}
-        for attempt in (1, 2):
+        for attempt in range(1, min(2, max(1, attempts)) + 1):
             out["attempts"] = attempt
-            result = run(ZETIC_DIR / "sdk", ZETIC_DIR / "models" / package, prompt,
-                         image=image, audio=audio, max_tokens=max_tokens)
+            try:
+                result = run(ZETIC_DIR / "sdk", ZETIC_DIR / "models" / package, prompt,
+                             image=image, audio=audio, max_tokens=max_tokens)
+            except Exception as exc:
+                result = {"ok": False, "errors": [f"runtime error: {type(exc).__name__}: {exc}"]}
             if result.get("ok"):
                 break
         timings = result.get("timings", {})
@@ -96,7 +99,12 @@ class LiquidAIEngine:
         if base["duration_sec"] > 30:
             base["errors"].append("recording is longer than 30 seconds")
             return base
-        WORK_DIR.mkdir(parents=True, exist_ok=True)
+        try:
+            _wrapper()
+            WORK_DIR.mkdir(parents=True, exist_ok=True)
+        except Exception as exc:
+            base["errors"].append(f"audio runtime unavailable: {type(exc).__name__}")
+            return base
         path = WORK_DIR / f"answer-{uuid.uuid4().hex}.wav"
         path.write_bytes(wav_bytes)
         try:
