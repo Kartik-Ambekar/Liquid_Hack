@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sister — Offline Health Triage & Imaging Assistant</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <!-- Top Navigation & Edge Status Header -->
+  <header class="app-header">
+    <div class="header-left">
+      <div class="logo-mark">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2v20M2 12h20"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-title">Sister <span class="badge-offline">Offline Edge Native</span></div>
+        <div class="brand-subtitle">Remote Health Triage & Medical Imaging Assistant</div>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <div class="edge-telemetry">
+        <span class="telemetry-pill"><span class="dot-green"></span> Dragonwing IQ-9075</span>
+        <span class="telemetry-pill">Wi-Fi: <strong class="text-emerald">OFFLINE SAFE</strong></span>
+        <span class="telemetry-pill">ASR: <strong>LFM3-Audio-2B</strong></span>
+        <span class="telemetry-pill">Vision: <strong>LFM3-Omni-2B</strong></span>
+      </div>
+      <button id="btn-toggle-speech" class="icon-btn" title="Toggle Sister Voice Output (F16)">
+        <span id="speech-icon">🔊</span> Voice Read Aloud
+      </button>
+      <button id="btn-show-audit" class="secondary-btn" title="Inspect Live JSONL Audit Log (F6)">
+        📋 Audit Log
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-layout">
+    <!-- Left Column: Patient Conversation & Triage Flow -->
+    <section class="chat-section">
+      <div class="chat-header">
+        <div class="patient-status">
+          <span class="status-indicator"></span>
+          <span>Self-Serve Patient Consultation</span>
+          <span id="session-badge" class="session-id-tag">Session: Initializing...</span>
+        </div>
+        <button id="btn-new-session" class="text-btn">🔄 Reset</button>
+      </div>
+
+      <!-- Message History -->
+      <div id="messages-container" class="messages-container">
+        <!-- Messages dynamically injected here -->
+      </div>
+
+      <!-- Quick Choices & Actions Area -->
+      <div id="quick-choices-container" class="quick-choices-container">
+        <!-- Quick choice chips injected here -->
+      </div>
+
+      <!-- Spoken Audio Transcript Feedback Box (F12) -->
+      <div id="transcript-feedback" class="transcript-feedback hidden">
+        <div class="feedback-header">
+          <span class="pulse-mic">🎙️</span>
+          <span>What Sister Heard (LiquidAI/LFM3-Audio-2B):</span>
+          <span id="asr-metrics" class="text-xs text-muted">Latency: ~220ms</span>
+        </div>
+        <div id="transcript-text" class="feedback-text" contenteditable="true" title="Click to edit before sending"></div>
+        <div class="feedback-actions">
+          <button id="btn-confirm-transcript" class="primary-btn btn-sm">Confirm & Send</button>
+          <button id="btn-rerecord-transcript" class="secondary-btn btn-sm">Record Again</button>
+        </div>
+      </div>
+
+      <!-- Input Controls (Voice First + Typed Fallback) -->
+      <div class="input-bar">
+        <button id="btn-record-voice" class="voice-record-btn" title="Speak Answer (Up to 30s)">
+          <div class="mic-inner">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="23"/>
+              <line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+          </div>
+          <span id="record-label" class="record-text">Hold to Speak</span>
+        </button>
+
+        <form id="text-input-form" class="text-form">
+          <input type="text" id="text-input" placeholder="Or type your symptoms here (fallback)..." autocomplete="off">
+          <button type="submit" id="btn-send-text" class="send-btn" title="Send Answer">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"/>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+          </button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Right Column: Medical Imaging (X-Ray/MRI) & Clinical Handover Note -->
+    <section class="diagnostic-section">
+      <!-- Tabs -->
+      <div class="diagnostic-tabs">
+        <button id="tab-imaging-btn" class="tab-btn active">📷 Medical Imaging (X-Ray / MRI)</button>
+        <button id="tab-handover-btn" class="tab-btn">📄 Clinical Handover Note</button>
+        <button id="tab-samples-btn" class="tab-btn">🧪 Preset Samples</button>
+      </div>
+
+      <!-- Tab Content 1: Medical Imaging Viewer & Analyzer -->
+      <div id="tab-imaging" class="tab-content active">
+        <div class="imaging-panel">
+          <div class="panel-instructions">
+            <strong>Diagnostic Ingest:</strong> Upload an X-ray or MRI file, or hold a film up to your camera. The image is preprocessed to 512×512 RGB and analyzed locally by <em>LiquidAI/LFM3-Omni-2B</em>.
+          </div>
+
+          <!-- Drag and Drop / File Input Box -->
+          <div id="drop-zone" class="drop-zone">
+            <input type="file" id="scan-file-input" accept="image/*,.dcm" class="file-hidden">
+            <div class="drop-prompt">
+              <div class="upload-icon">📁</div>
+              <p><strong>Click to browse</strong> or drag & drop scan here</p>
+              <span class="text-xs text-muted">Supports Chest X-Rays, Bone/Limb X-Rays, Brain & Spine MRIs</span>
+            </div>
+            <div class="upload-alternatives">
+              <button id="btn-open-camera" class="secondary-btn btn-sm">📸 Capture from Laptop Camera</button>
+            </div>
+          </div>
+
+          <!-- Image Display Canvas with Interactive Bounding Boxes (F11) -->
+          <div id="image-viewer-container" class="image-viewer-container hidden">
+            <div class="viewer-toolbar">
+              <span id="scan-meta-tag" class="scan-meta-tag">Analyzing scan...</span>
+              <button id="btn-toggle-boxes" class="text-btn text-xs">Toggle Bounding Boxes</button>
+            </div>
+            <div class="canvas-wrapper">
+              <canvas id="imaging-canvas" width="512" height="512"></canvas>
+            </div>
+          </div>
+
+          <!-- Imaging Observations & Metrics Card (F5, S2) -->
+          <div id="imaging-analysis-card" class="imaging-analysis-card hidden">
+            <div class="card-header">
+              <span class="card-title">Observations for Clinician Review</span>
+              <span id="analysis-urgency-badge" class="badge">NORMAL</span>
+            </div>
+            <p id="analysis-primary-obs" class="primary-obs-text"></p>
+            <div class="metrics-grid" id="analysis-metrics-grid">
+              <!-- Key radiological metrics injected here -->
+            </div>
+            <div class="safety-disclaimer">
+              ℹ️ <strong>Safety Rule S2:</strong> Observations are generated to assist visiting clinicians. They do not replace formal radiological reports.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Content 2: Handover Note (F8) -->
+      <div id="tab-handover" class="tab-content">
+        <div class="handover-panel">
+          <div class="handover-header-row">
+            <div>
+              <h3>Structured Handover Summary</h3>
+              <p class="text-sm text-muted">One-page document for receiving clinician or health worker</p>
+            </div>
+            <div class="handover-actions">
+              <button id="btn-copy-handover" class="secondary-btn btn-sm">📋 Copy Text</button>
+              <button id="btn-print-handover" class="primary-btn btn-sm">🖨️ Print / Save</button>
+            </div>
+          </div>
+          <div id="handover-content" class="handover-content-box">
+            <div class="placeholder-text">
+              Complete the interview session to generate the structured handover note.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Content 3: 1-Click Preset Samples for Judges -->
+      <div id="tab-samples" class="tab-content">
+        <div class="samples-panel">
+          <p class="text-sm text-muted">Click any preset below to immediately test the X-ray or MRI analysis pipeline:</p>
+          <div id="samples-list" class="samples-list">
+            <!-- Sample buttons rendered here -->
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Live JSONL Audit Log Modal (F6) -->
+  <div id="audit-modal" class="modal hidden">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-header">
+        <h3>Live JSONL Audit Log Inspector (F6)</h3>
+        <button id="btn-close-audit" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="text-sm text-muted">Flushed after every conversational turn to <code>sister_audit.jsonl</code>. Shows exact timestamps, inputs, rule execution, and model latency.</p>
+        <div class="audit-log-viewer">
+          <pre id="audit-log-pre">Loading audit records...</pre>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-refresh-audit" class="secondary-btn btn-sm">Refresh Log</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Camera Capture Modal (F9) -->
+  <div id="camera-modal" class="modal hidden">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>Camera Scan Capture (F9)</h3>
+        <button id="btn-close-camera" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="text-sm text-muted">Hold your X-Ray or MRI film up to the camera lens in good lighting.</p>
+        <div class="camera-stream-wrapper">
+          <video id="camera-video" autoplay playsinline></video>
+          <div class="camera-guide-box"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-capture-frame" class="primary-btn">📸 Freeze & Analyze Frame</button>
+        <button id="btn-cancel-camera" class="secondary-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
