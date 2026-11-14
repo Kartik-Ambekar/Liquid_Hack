@@ -138,6 +138,12 @@ serial line, where the board transcribes it.
 goes down the serial line and is transcribed on the board. Ctrl-] quits. A terminal cannot see a key release,
 so release is detected when the key's auto-repeat stops.
 
+**Dashboard:** the same program serves a status page at `http://127.0.0.1:8765` (loopback only, no external
+assets). It shows whether the board and Sister are up, whose turn it is (Sister speaking, you recording,
+the board transcribing), the conversation, the rule decision and the live board log. Hold SPACE in the page
+to talk; the browser sees the real key release. Everything on it is parsed from what the board prints over
+the serial cable. Inference and every decision stay on the board.
+
 Type an answer, type a choice number, `v samples/patient_cough.wav` to answer by voice from a WAV file, or
 `s 5` at the scan question to attach a sample scan. The decision, the rule that fired, the model's
 explanation, the handover note and the audit log lines are printed at the end.

@@ -10,6 +10,9 @@ open, and shows Sister exactly as the board prints her. All inference stays on t
   Type         everything else goes to the board as usual (a quick tap of space is a space)
   Ctrl-]       quit this console (Sister keeps running on the board)
 
+It also serves a status page at http://127.0.0.1:8765 (loopback only): whose turn it is,
+the conversation, the rule decision and the board log, with hold-SPACE-to-talk in the browser.
+
 Usage: tools/sister_console.py [--start] [--port /dev/cu.usbserial-XXXX] [--mic N]
   --start   if the board is at a shell prompt, start Sister in speaking mode
 Close any `screen` session on the same port first; only one program can own it.
@@ -32,6 +35,9 @@ import time
 import tty
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from dashboard import Dashboard  # noqa: E402
+
 RATE = 12000                  # mu-law, mono: 12 kB per second of speech on a 115200 baud line
 TAP_WINDOW = 0.70             # no auto-repeat within this long after a press: it was a typed space
 RELEASE_GAP = 0.30            # auto-repeat stopped for this long: the key was released
@@ -48,7 +54,9 @@ def note(text):
 
 
 class Console:
-    def __init__(self, port, mic):
+    def __init__(self, port, mic, web_port=8765):
+        self.dash = Dashboard(web_port)
+        self.level, self.sending = 0.0, False
         self.serial = os.open(port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
         tty.setraw(self.serial)
         attrs = termios.tcgetattr(self.serial)
@@ -90,6 +98,7 @@ class Console:
         if data:
             os.write(1, data)
             self.log.write(data)
+            self.dash.feed(data)
             self.tail = (self.tail + ANSI.sub(b"", data))[-400:]
 
     def waiting_for_answer(self):
@@ -103,6 +112,7 @@ class Console:
             return
         if not data:
             return
+        self.level = max((b ^ 0xFF) & 0x7F for b in data[::16]) / 127   # rough loudness from mu-law, for the meter
         if self.state == "idle":
             self.preroll = (self.preroll + data)[-PREROLL:]
         else:
@@ -121,11 +131,53 @@ class Console:
         speech, self.state, self.speech = bytes(self.speech), "idle", bytearray()
         if len(speech) < MIN_SPEECH:
             note("too short to be speech; hold SPACE while you talk")
+            self.dash.note("That was too short to be speech. Hold SPACE while you talk.")
             return
         if not self.waiting_for_answer():
             note("Sister is not waiting for an answer right now; nothing was sent")
+            self.dash.note("Sister was not waiting for an answer, so nothing was sent.")
             return
-        self.send(speech)
+        self.sending = True
+        self.sync()
+        try:
+            self.send(speech)
+        finally:
+            self.sending = False
+
+    def sync(self):
+        """Publish what the dashboard cannot work out from the board's output alone."""
+        recording = self.state in ("holding", "web", "timed")
+        self.dash.update(waiting=self.waiting_for_answer(), shell=self.tail.rstrip().endswith(b"$"),
+                         mic="sending" if self.sending else "recording" if recording else "idle",
+                         level=self.level, seconds=len(self.speech) / RATE if recording else 0.0)
+
+    def commands(self):
+        """Requests from the dashboard: push-to-talk, a typed answer, start a conversation."""
+        while True:
+            try:
+                name, payload = self.dash.commands.get_nowait()
+            except Exception:
+                return
+            if name == "ptt_start" and self.state == "idle":
+                if self.waiting_for_answer():
+                    self.begin("web")
+                else:
+                    self.dash.note("Sister is not waiting for an answer yet.")
+            elif name == "ptt_stop" and self.state == "web":
+                self.finish()
+            elif name == "send":
+                text = str(payload.get("text", "")).replace("\n", " ").strip()[:300]
+                if text and self.waiting_for_answer():
+                    self.write_serial(b"\x15" + text.encode() + b"\n")
+                elif text:
+                    self.dash.note("Sister is not waiting for an answer yet.")
+            elif name == "start":
+                if not self.tail.rstrip().endswith(b"$"):
+                    self.write_serial(b"\x03")
+                    time.sleep(0.3)
+                    self.write_serial(b"\x03")
+                    time.sleep(0.5)
+                self.write_serial(b"\x15" + START_CMD)
 
     def send(self, speech):
         seconds = len(speech) / RATE
@@ -148,7 +200,7 @@ class Console:
             ch = bytes([byte])
             if ch == b"\x1d":         # Ctrl-]
                 return False
-            if self.state == "timed":
+            if self.state in ("timed", "web"):
                 continue
             if ch == b" ":
                 if self.state == "idle":
@@ -177,6 +229,8 @@ class Console:
             self.finish()
         elif self.state == "timed" and now > self.timed_until:
             self.finish()
+        elif self.state == "web" and len(self.speech) > MAX_SPEECH:
+            self.finish()
 
     def injected(self):
         """Other programs can write to .sister_console/inject: bytes go to the board;
@@ -187,10 +241,11 @@ class Console:
             return
         if not data:
             return
-        if data.startswith(b"PTT"):
+        timed = re.fullmatch(rb"PTT (\d+(?:\.\d+)?)\s*", data)
+        if timed:
             self.begin("timed")
-            self.timed_until = time.monotonic() + float(data.split()[1])
-            note(f"recording for {data.split()[1].decode()} s (requested by a script)")
+            self.timed_until = time.monotonic() + float(timed[1])
+            note(f"recording for {timed[1].decode()} s (requested by a script)")
         else:
             self.write_serial(data)
 
@@ -207,7 +262,7 @@ class Console:
                 self.write_serial(START_CMD)
             else:
                 note("the board is not at a shell prompt; log in or finish what is running, then start Sister")
-        note("microphone is on. Hold SPACE to talk, release to send. Ctrl-] quits.")
+        note(f"microphone is on. Hold SPACE to talk, release to send. Ctrl-] quits. Dashboard: http://127.0.0.1:{self.dash.port}")
         while True:
             ready = select.select([0, self.serial, self.mic.stdout, self.fifo], [], [], 0.05)[0]
             if self.serial in ready:
@@ -219,6 +274,8 @@ class Console:
             if 0 in ready and not self.key(os.read(0, 64)):
                 return
             self.tick()
+            self.commands()
+            self.sync()
             if self.mic.poll() is not None:
                 note("the microphone stopped (ffmpeg exited); typing still works")
                 self.mic = subprocess.Popen(["sleep", "86400"], stdout=subprocess.PIPE)
@@ -229,12 +286,13 @@ def main():
     parser.add_argument("--start", action="store_true")
     parser.add_argument("--port")
     parser.add_argument("--mic", default="0", help="avfoundation audio device index (default 0)")
+    parser.add_argument("--web-port", type=int, default=8765, help="dashboard port on 127.0.0.1 (default 8765)")
     args = parser.parse_args()
     ports = sorted(glob.glob("/dev/cu.usbserial-*"))
     port = args.port or (ports[1] if len(ports) > 1 else None)   # the second port is the Linux console
     if not port:
         sys.exit("no board serial port found; is the micro-USB debug cable plugged in?")
-    console = Console(port, args.mic)
+    console = Console(port, args.mic, args.web_port)
     saved = termios.tcgetattr(0)
     try:
         tty.setraw(0)

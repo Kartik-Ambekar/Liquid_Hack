@@ -165,7 +165,7 @@ class LiquidAIEngine:
         command = [str(sdk / "bin/zetic_lfm3_cli"), "chat", "--model", str(ZETIC_DIR / "models" / cls.SPEECH_PACKAGE),
                    "--target", "v73", "--lib-dir", str(sdk / "lib"), "--max-tokens", "700", "--tts",
                    "--out", str(out_path), "--system", "Perform TTS in American English using a female voice.",
-                   "Say: " + text.strip()]
+                   text.strip()]
         try:
             env = dict(os.environ, LD_LIBRARY_PATH=str(sdk / "lib"))
             done = subprocess.run(command, cwd=sdk, env=env, capture_output=True, text=True, timeout=120)
