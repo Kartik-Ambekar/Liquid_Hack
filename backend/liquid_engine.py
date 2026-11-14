@@ -1,177 +1,171 @@
 """
-liquid_engine.py - Edge Runtime Connector for Liquid AI Models
-Supported models:
-  - Audio/Voice transcription: LiquidAI/LFM3-Audio-2B (and LFM3-Omni-2B)
-  - Medical Imaging Vision: LiquidAI/LFM3-Omni-2B / LFM3-VL-2B (512x512 RGB)
-  - Clinical Dialogue: LiquidAI/LFM3-1.7B (GenieX OpenAI-compatible endpoint)
+liquid_engine.py - Liquid AI models on the Dragonwing IQ-9075, through the ZETIC Ixian CLI.
 
-Supports:
-  1. Local GenieX daemon (http://127.0.0.1:8000/v1) for LFM3-1.7B
-  2. ZETIC / Liquid CLI wrapper for LFM3-Audio-2B & LFM3-Omni-2B
-  3. Built-in Offline Edge Engine (runs with Wi-Fi off, zero internet connection,
-     providing verified latency telemetry: TTFT, tokens/sec, turn latency).
+Every method here makes a real, capped request to a model staged on the board:
+  - Speech to text:      LFM3-Omni-2B  (one WAV, up to 30 s, English)
+  - Scan description:    LFM3-Omni-2B  (one 512x512 RGB image)
+  - Plain explanation:   LFM3-1.7B     (text)
+
+Nothing is simulated. If the runtime or a model is missing, or the answer fails
+validation, the result has ok=False and an error list, and the caller falls back
+to typed input or to the rule text. All timings come from the runtime's own log.
+
+Layout expected on the board (override with SISTER_ZETIC_DIR):
+  ~/zetic-demo/run.py            repo wrapper around zetic_lfm3_cli
+  ~/zetic-demo/sdk/              Ixian Hexagon SDK 0.2.1
+  ~/zetic-demo/models/<package>/v73/
 """
 
+import importlib.util
+import io
 import os
+import re
 import time
-import json
+import uuid
 import wave
-import urllib.request
-import urllib.error
-from typing import Dict, Any, Optional, Tuple
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+ZETIC_DIR = Path(os.environ.get("SISTER_ZETIC_DIR", "~/zetic-demo")).expanduser()
+WORK_DIR = ZETIC_DIR / "work"
+_run = None
+
+
+def _wrapper():
+    """Load the board's run.py once. Raises if the runtime is not staged."""
+    global _run
+    if _run is None:
+        spec = importlib.util.spec_from_file_location("zetic_run", ZETIC_DIR / "run.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _run = module.run
+    return _run
+
 
 class LiquidAIEngine:
-    """
-    Unified manager for Liquid AI LFM3 edge models.
-    """
-
-    GENIEX_URL = os.environ.get("GENIEX_ENDPOINT", "http://127.0.0.1:8000/v1")
-    AUDIO_MODEL = "LiquidAI/LFM3-Audio-2B"
-    VISION_MODEL = "LiquidAI/LFM3-Omni-2B"
-    TEXT_MODEL = "LiquidAI/LFM3-1.7B"
+    AUDIO_PACKAGE = os.environ.get("SISTER_AUDIO_PKG", "lfm3-omni-2b")
+    VISION_PACKAGE = os.environ.get("SISTER_VISION_PKG", "lfm3-omni-2b")
+    TEXT_PACKAGE = os.environ.get("SISTER_TEXT_PKG", "lfm3-1.7b")
 
     @classmethod
-    def check_geniex_available(cls) -> bool:
-        """
-        Checks if the local resident GenieX OpenAI-compatible server is running.
-        """
+    def call(cls, package: str, prompt: str, *, image: Optional[str] = None,
+             audio: Optional[str] = None, max_tokens: int = 128) -> Dict[str, Any]:
+        """One capped request, validated by the wrapper, with a single retry."""
+        started = time.perf_counter()
+        out: Dict[str, Any] = {"ok": False, "text": "", "package": package, "errors": [], "attempts": 0}
         try:
-            req = urllib.request.Request(f"{cls.GENIEX_URL}/models", headers={"User-Agent": "Sister-Client"})
-            with urllib.request.urlopen(req, timeout=0.8) as resp:
-                return resp.status == 200
-        except Exception:
-            return False
+            run = _wrapper()
+        except Exception as exc:  # runtime not staged, or not on the board
+            out["errors"].append(f"runtime unavailable: {type(exc).__name__}: {exc}")
+            out["latency_ms"] = round((time.perf_counter() - started) * 1000, 1)
+            return out
+        result: Dict[str, Any] = {}
+        for attempt in (1, 2):
+            out["attempts"] = attempt
+            result = run(ZETIC_DIR / "sdk", ZETIC_DIR / "models" / package, prompt,
+                         image=image, audio=audio, max_tokens=max_tokens)
+            if result.get("ok"):
+                break
+        timings = result.get("timings", {})
+        out.update(
+            ok=bool(result.get("ok")),
+            text=result.get("text", ""),
+            errors=list(result.get("errors", [])),
+            model=(result.get("model") or {}).get("repo_id") if isinstance(result.get("model"), dict) else result.get("model"),
+            precision=result.get("precision"),
+            completion_tokens=result.get("completion_tokens"),
+            finish_reason=result.get("finish_reason"),
+            npu_evidence=bool(result.get("device_evidence")),
+            load_ms=timings.get("model_load_ms"),
+            ttft_ms=timings.get("runtime_ttft_ms"),
+            tokens_per_sec=timings.get("runtime_decode_tok_s"),
+            latency_ms=round((time.perf_counter() - started) * 1000, 1),
+        )
+        return out
 
     @classmethod
     def transcribe_audio_wav(cls, wav_bytes: bytes) -> Dict[str, Any]:
-        """
-        Transcribes patient spoken answer (up to 30s) using LiquidAI/LFM3-Audio-2B.
-        Platform constraint: WAV input, up to 30 seconds.
-        Measures TTFT and turn time.
-        """
-        start_time = time.perf_counter()
-        
-        # Validate WAV format and duration
-        duration_sec = 0.0
+        """Transcribe one spoken answer on the board. WAV only, up to 30 seconds."""
+        base = {"transcript": "", "ok": False, "errors": [], "duration_sec": None}
         try:
-            with wave.open(io_bytes := io_wrapper(wav_bytes), 'rb') as wf:
-                frames = wf.getnframes()
-                rate = wf.getframerate()
-                duration_sec = round(frames / float(rate), 2)
-        except Exception:
-            duration_sec = min(30.0, round(len(wav_bytes) / 32000.0, 2))
+            with wave.open(io.BytesIO(wav_bytes), "rb") as wf:
+                base["duration_sec"] = round(wf.getnframes() / float(wf.getframerate()), 2)
+        except Exception as exc:
+            base["errors"].append(f"not a readable WAV file: {exc}")
+            return base
+        if base["duration_sec"] > 30:
+            base["errors"].append("recording is longer than 30 seconds")
+            return base
+        WORK_DIR.mkdir(parents=True, exist_ok=True)
+        path = WORK_DIR / f"answer-{uuid.uuid4().hex}.wav"
+        path.write_bytes(wav_bytes)
+        try:
+            result = cls.call(cls.AUDIO_PACKAGE, "Transcribe the audio.", audio=str(path), max_tokens=128)
+        finally:
+            path.unlink(missing_ok=True)
+        # The model sometimes repeats the instruction after the transcript.
+        # It can also repeat the wrapper's request tag; neither is something the patient said.
+        text = re.sub(r"\s*\[request:[0-9a-f]+\]\s*", " ", result.get("text", ""))
+        text = re.sub(r"\s*Transcribe the audio\.?\s*$", "", text, flags=re.I).strip()
+        result.update(base | {"transcript": text, "ok": result["ok"] and bool(text),
+                              "errors": result["errors"], "mode": "ZETIC Ixian CLI on the board"})
+        return result
 
-        # Check for local CLI or GenieX endpoint
-        transcribed_text = None
-        mode = "LiquidAI/LFM3-Audio-2B (Edge Runtime)"
-        
-        # 1. Try local CLI / ZETIC wrapper if executable exists
-        cli_bin = os.environ.get("LIQUID_CLI_BIN", "lfm_cli")
-        if os.path.exists(cli_bin):
-            try:
-                import tempfile, subprocess
-                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tf:
-                    tf.write(wav_bytes)
-                    tmp_wav = tf.name
-                res = subprocess.run([cli_bin, "--model", cls.AUDIO_MODEL, "--input", tmp_wav], capture_output=True, text=True, timeout=10)
-                os.remove(tmp_wav)
-                if res.returncode == 0:
-                    transcribed_text = res.stdout.strip()
-                    mode = "LiquidAI/LFM3-Audio-2B (ZETIC CLI)"
-            except Exception:
-                pass
-
-        # 2. High-fidelity Offline Speech Transcription Engine for English
-        if not transcribed_text:
-            # If wav contains intelligible speech patterns, extract keywords
-            # Fallback transcript generator that respects patient's voice response length
-            time.sleep(min(0.35, max(0.12, duration_sec * 0.03))) # Realistic edge inference latency
-            transcribed_text = cls._extract_or_fallback_voice(wav_bytes, duration_sec)
-
-        elapsed = time.perf_counter() - start_time
-        ttft = round(elapsed * 0.45, 3) # Edge TTFT
-        tokens = len(transcribed_text.split())
-        tok_per_sec = round(tokens / max(0.01, elapsed - ttft), 1)
-
-        return {
-            "transcript": transcribed_text,
-            "model": cls.AUDIO_MODEL,
-            "mode": mode,
-            "duration_sec": duration_sec,
-            "latency_ms": round(elapsed * 1000, 1),
-            "ttft_ms": round(ttft * 1000, 1),
-            "tokens_per_sec": tok_per_sec
-        }
+    # Plain words the model uses, mapped in code to the terms the triage rules look for.
+    SCAN_FLAGS = (
+        ("fracture", r"fractur|\bbreak|broken|\bcrack|disrupt"),
+        ("opacity", r"opacit|cloudy|hazy|consolidat|white patch"),
+        ("lesion", r"lesion|\bmass\b|bright[^.]{0,40}\bspot|abnormal signal"),
+    )
 
     @classmethod
-    def _extract_or_fallback_voice(cls, wav_bytes: bytes, duration: float) -> str:
+    def describe_scan(cls, image_path: str) -> Dict[str, Any]:
+        """Describe one 512x512 RGB scan as observations for a clinician to confirm.
+
+        The prompt does not suggest findings. Flags are derived from the model's own
+        words by the patterns above, so the rules, not the model, decide urgency.
         """
-        Robust offline speech interpretation.
-        Handles short affirmations, symptom descriptions, and numbers.
-        """
-        if duration < 1.0:
-            return "No"
-        elif duration < 2.5:
-            return "About 3 days ago"
-        elif duration < 5.0:
-            return "I have a cough and fever that got worse yesterday"
-        else:
-            return "I fell on my arm yesterday and it hurts a lot when I try to move it"
+        prompt = ("This is a medical scan. In two short plain sentences, say which body part it shows "
+                  "and describe anything that looks unusual. If nothing looks unusual, say so. "
+                  "Do not give a diagnosis.")
+        result = cls.call(cls.VISION_PACKAGE, prompt, image=str(image_path), max_tokens=120)
+        result["flags"] = [name for name, pattern in cls.SCAN_FLAGS if re.search(pattern, result["text"], re.I)]
+        return result
 
     @classmethod
     def generate_clinical_explanation(cls, prompt: str, system_prompt: str = "") -> Dict[str, Any]:
-        """
-        Generates clinical dialogue or explanation using LiquidAI/LFM3-1.7B.
-        Tries local GenieX server first, then offline deterministic dialogue generator.
-        """
-        start_time = time.perf_counter()
-        
-        # Try local GenieX endpoint
-        if cls.check_geniex_available():
-            try:
-                payload = json.dumps({
-                    "model": cls.TEXT_MODEL,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": prompt}
-                    ],
-                    "temperature": 0.2,
-                    "max_tokens": 150
-                }).encode("utf-8")
-                req = urllib.request.Request(
-                    f"{cls.GENIEX_URL}/chat/completions",
-                    data=payload,
-                    headers={"Content-Type": "application/json", "User-Agent": "Sister"}
-                )
-                with urllib.request.urlopen(req, timeout=3.5) as resp:
-                    data = json.loads(resp.read().decode("utf-8"))
-                    text = data["choices"][0]["message"]["content"].strip()
-                    elapsed = time.perf_counter() - start_time
-                    return {
-                        "text": text,
-                        "model": cls.TEXT_MODEL,
-                        "mode": "GenieX Resident Server",
-                        "latency_ms": round(elapsed * 1000, 1),
-                        "ttft_ms": round(elapsed * 0.35 * 1000, 1),
-                        "tokens_per_sec": round(len(text.split()) / max(0.01, elapsed * 0.65), 1)
-                    }
-            except Exception:
-                pass
+        """Free-text generation with the text model."""
+        return cls.call(cls.TEXT_PACKAGE, (system_prompt + "\n\n" + prompt).strip(), max_tokens=160)
 
-        # Offline edge response generator for Sister
-        # Emulates LFM3-1.7B fast response times (median ~3.3s on cold, ~250ms warm)
-        time.sleep(0.18) # Simulated edge generation
-        elapsed = time.perf_counter() - start_time
-        
-        return {
-            "text": prompt,
-            "model": cls.TEXT_MODEL,
-            "mode": "LiquidAI/LFM3-1.7B (Edge Native)",
-            "latency_ms": round(elapsed * 1000, 1),
-            "ttft_ms": round(elapsed * 0.3 * 1000, 1),
-            "tokens_per_sec": 42.5
-        }
+    @classmethod
+    def explain_decision(cls, decision: Dict[str, Any], session: Dict[str, Any]) -> Dict[str, Any]:
+        """The rule has already decided. The model only rewords it for the patient."""
+        prompt = (
+            "You are Sister, a kind nurse speaking to a patient with no medical training. "
+            "A safety rule has already decided how urgently they need care. Do not change that decision, "
+            "do not name any disease, and do not give a diagnosis. In two or three short, simple sentences, "
+            "tell the patient what to do and why.\n"
+            f"Patient said: {'; '.join(session.get('symptoms', []))}. "
+            f"For how long: {session.get('duration', '')}. How bad: {session.get('severity', '')}.\n"
+            f"Decision: {decision.get('urgency_label')}.\n"
+            f"Reason: {decision.get('summary_reason')}\n"
+            f"What to do: {decision.get('recommended_action')}"
+        )
+        return cls.call(cls.TEXT_PACKAGE, prompt, max_tokens=160)
 
-def io_wrapper(b: bytes):
-    import io
-    return io.BytesIO(b)
+    @classmethod
+    def runtime_status(cls) -> Dict[str, Any]:
+        """What is actually staged on this machine. No inference."""
+        packages = {}
+        for role, package in (("audio", cls.AUDIO_PACKAGE), ("vision", cls.VISION_PACKAGE), ("text", cls.TEXT_PACKAGE)):
+            packages[role] = {"package": package,
+                              "staged": (ZETIC_DIR / "models" / package / "v73" / "manifest.json").is_file()}
+        return {"zetic_dir": str(ZETIC_DIR),
+                "sdk_staged": (ZETIC_DIR / "sdk" / "bin" / "zetic_lfm3_cli").is_file(),
+                "wrapper_staged": (ZETIC_DIR / "run.py").is_file(),
+                "packages": packages}
+
+    @classmethod
+    def check_geniex_available(cls) -> bool:
+        """Kept for callers of the old interface. Sister does not use GenieX."""
+        return False
